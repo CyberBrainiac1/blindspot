@@ -17,6 +17,9 @@ pi = [
 ml = ["ultralytics>=8.3.0"]
 dev = ["pytest>=8.0", "ruff>=0.11.0"]
 
+[tool.setuptools]
+packages = ["device", "device.blindspot_device", "device.scripts", "ml"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
