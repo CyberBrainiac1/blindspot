@@ -79,6 +79,11 @@ class DeviceConfig:
     supabase_photos_table: str = field(
         default_factory=lambda: os.getenv("BLINDSPOT_SUPABASE_PHOTOS_TABLE", "photos")
     )
+    supabase_automated_photos_table: str = field(
+        default_factory=lambda: os.getenv(
+            "BLINDSPOT_SUPABASE_AUTOMATED_PHOTOS_TABLE", "automated_photos"
+        )
+    )
     supabase_ai_summary_table: str = field(
         default_factory=lambda: os.getenv("BLINDSPOT_SUPABASE_AI_SUMMARY_TABLE", "ai_summary")
     )
