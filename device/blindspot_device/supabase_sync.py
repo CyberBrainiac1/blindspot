@@ -28,6 +28,7 @@ class SupabasePhotoUploader:
         bucket: str = "photos",
         rides_table: str = "rides",
         photos_table: str = "photos",
+        automated_photos_table: str = "automated_photos",
         ai_summary_table: str = "ai_summary",
         device_id: str = "dev-pi-001",
         user_id: str | None = None,
@@ -36,6 +37,7 @@ class SupabasePhotoUploader:
         self.bucket = bucket
         self.rides_table = rides_table
         self.photos_table = photos_table
+        self.automated_photos_table = automated_photos_table
         self.ai_summary_table = ai_summary_table
         self.device_id = device_id
         self.user_id = user_id
@@ -58,6 +60,7 @@ class SupabasePhotoUploader:
             bucket=config.supabase_bucket,
             rides_table=config.supabase_rides_table,
             photos_table=config.supabase_photos_table,
+            automated_photos_table=config.supabase_automated_photos_table,
             ai_summary_table=config.supabase_ai_summary_table,
             device_id=config.device_id,
             user_id=config.user_id,
@@ -161,15 +164,23 @@ class SupabasePhotoUploader:
     ) -> SupabaseUploadResult | None:
         if not self.enabled:
             return None
-        if event_type != "manual_flag":
-            return None
         if not ride_id:
             return None
         if not photo_path.exists():
             raise FileNotFoundError(photo_path)
 
         captured_at = captured_at or _utc_now()
-        storage_path = f"devices/{self.device_id}/rides/{ride_id}/{photo_path.name}"
+        event_type = event_type.strip() if event_type else "automated_capture"
+        is_manual_photo = event_type == "manual_flag"
+        if is_manual_photo:
+            storage_path = f"devices/{self.device_id}/rides/{ride_id}/{photo_path.name}"
+            table_name = self.photos_table
+        else:
+            event_path = _safe_storage_path_part(event_type)
+            storage_path = (
+                f"devices/{self.device_id}/rides/{ride_id}/automated/{event_path}/{photo_path.name}"
+            )
+            table_name = self.automated_photos_table
 
         with photo_path.open("rb") as file:
             self._client.storage.from_(self.bucket).upload(
@@ -188,15 +199,16 @@ class SupabasePhotoUploader:
             "storage_url": storage_url,
             "event_type": event_type,
             "captured_at": captured_at,
-            "is_blurred": False,
             "is_processed": False,
         }
+        if is_manual_photo:
+            photo_row["is_blurred"] = False
         if lat is not None:
             photo_row["lat"] = lat
         if lng is not None:
             photo_row["lng"] = lng
 
-        response = self._client.table(self.photos_table).insert(photo_row).execute()
+        response = self._client.table(table_name).insert(photo_row).execute()
         inserted = getattr(response, "data", None)
         return SupabaseUploadResult(
             bucket=self.bucket,
@@ -215,3 +227,8 @@ class SupabasePhotoUploader:
 def _is_schema_cache_miss(exc: Exception) -> bool:
     text = str(exc)
     return "PGRST204" in text or "PGRST205" in text or "schema cache" in text
+
+
+def _safe_storage_path_part(value: str) -> str:
+    safe = "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in value)
+    return safe.strip("-_") or "automated_capture"

@@ -132,7 +132,7 @@ class SupabasePhotoUploaderTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual(client.calls, [])
 
-    def test_upload_photo_skips_non_manual_capture_types(self) -> None:
+    def test_upload_photo_routes_non_manual_capture_types_to_automated_photos(self) -> None:
         client = _Client()
         uploader = SupabasePhotoUploader(
             supabase_url=None,
@@ -151,8 +151,19 @@ class SupabasePhotoUploaderTests(unittest.TestCase):
                 event_type="qwen_interval",
             )
 
-        self.assertIsNone(result)
-        self.assertEqual(client.calls, [])
+        self.assertIsNotNone(result)
+        upload_call = next(call for call in client.calls if call[0] == "upload")
+        self.assertIn(
+            "devices/pi-test/rides/11111111111111111111111111111111/automated/qwen_interval/",
+            upload_call[2],
+        )
+
+        insert_call = next(call for call in client.calls if call[0] == "insert")
+        self.assertEqual(insert_call[1], "automated_photos")
+        self.assertEqual(insert_call[2]["ride_id"], "11111111111111111111111111111111")
+        self.assertEqual(insert_call[2]["event_type"], "qwen_interval")
+        self.assertNotIn("is_blurred", insert_call[2])
+        self.assertFalse(any(call[0] == "insert" and call[1] == "photos" for call in client.calls))
 
     def test_start_and_end_ride_write_rides_table(self) -> None:
         client = _Client()

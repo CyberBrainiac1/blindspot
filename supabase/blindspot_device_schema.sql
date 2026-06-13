@@ -127,6 +127,87 @@ begin
   end if;
 end $$;
 
+create table if not exists public.automated_photos (
+  id uuid primary key default gen_random_uuid(),
+  ride_id uuid not null references public.rides(id) on delete cascade,
+  event_id uuid,
+  event_type text not null default 'automated_capture',
+  storage_url text not null,
+  lat double precision,
+  lng double precision,
+  captured_at timestamptz not null default now(),
+  is_processed boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table public.automated_photos
+  add column if not exists ride_id uuid references public.rides(id) on delete cascade,
+  add column if not exists event_id uuid,
+  add column if not exists event_type text not null default 'automated_capture',
+  add column if not exists storage_url text,
+  add column if not exists lat double precision,
+  add column if not exists lng double precision,
+  add column if not exists captured_at timestamptz not null default now(),
+  add column if not exists is_processed boolean not null default false,
+  add column if not exists created_at timestamptz not null default now();
+
+update public.automated_photos
+set event_type = 'automated_capture'
+where event_type is null or event_type = '' or event_type = 'manual_flag';
+
+update public.automated_photos
+set storage_url = ''
+where storage_url is null;
+
+alter table public.automated_photos
+  alter column event_type set not null,
+  alter column storage_url set not null,
+  alter column captured_at set not null,
+  alter column is_processed set not null,
+  alter column created_at set not null;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'automated_photos_require_ride_id'
+      and conrelid = 'public.automated_photos'::regclass
+  ) then
+    alter table public.automated_photos
+    add constraint automated_photos_require_ride_id
+    check (ride_id is not null)
+    not valid;
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'automated_photos_machine_only'
+      and conrelid = 'public.automated_photos'::regclass
+  ) then
+    alter table public.automated_photos
+    add constraint automated_photos_machine_only
+    check (event_type <> 'manual_flag' and event_type <> '')
+    not valid;
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'automated_photos_storage_url_present'
+      and conrelid = 'public.automated_photos'::regclass
+  ) then
+    alter table public.automated_photos
+    add constraint automated_photos_storage_url_present
+    check (storage_url <> '')
+    not valid;
+  end if;
+end $$;
+
 create table if not exists public.ai_summary (
   id uuid primary key default gen_random_uuid(),
   ride_id uuid not null references public.rides(id) on delete cascade,
@@ -264,6 +345,9 @@ on public.rides (device_id, started_at desc);
 create index if not exists photos_ride_captured_idx
 on public.photos (ride_id, captured_at desc);
 
+create index if not exists automated_photos_ride_captured_idx
+on public.automated_photos (ride_id, captured_at desc);
+
 create index if not exists ai_summary_ride_created_idx
 on public.ai_summary (ride_id, created_at desc);
 
@@ -273,11 +357,13 @@ where user_id is not null;
 
 alter table public.rides enable row level security;
 alter table public.photos enable row level security;
+alter table public.automated_photos enable row level security;
 alter table public.ai_summary enable row level security;
 
 grant usage on schema public to anon, authenticated;
 grant select, insert, update on public.rides to anon, authenticated;
 grant select, insert on public.photos to anon, authenticated;
+grant select, insert on public.automated_photos to anon, authenticated;
 grant select, insert on public.ai_summary to anon, authenticated;
 
 drop policy if exists "blindspot rides insert" on public.rides;
@@ -321,6 +407,22 @@ with check (
 drop policy if exists "blindspot photos select" on public.photos;
 create policy "blindspot photos select"
 on public.photos for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "blindspot automated photos insert" on public.automated_photos;
+create policy "blindspot automated photos insert"
+on public.automated_photos for insert
+to anon, authenticated
+with check (
+  ride_id is not null
+  and event_type is not null and event_type <> '' and event_type <> 'manual_flag'
+  and storage_url is not null and storage_url <> ''
+);
+
+drop policy if exists "blindspot automated photos select" on public.automated_photos;
+create policy "blindspot automated photos select"
+on public.automated_photos for select
 to anon, authenticated
 using (true);
 

@@ -49,10 +49,10 @@ The code is designed to work without hardware while the rest of the product is s
 - `picamera2` for Pi Camera capture.
 - `pyserial` for UART GPS.
 - `gpiozero` for button, LED, and buzzer.
-- `supabase` for uploading captured photos to Supabase Storage + the `photos` table.
+- `supabase` for uploading captured photos to Supabase Storage + the `photos` and `automated_photos` tables.
 - `requests` for the Pi-side Hack Club AI call after a ride.
 
-For v1, AI processing is intentionally post-ride on the Raspberry Pi instead of always-on real-time inference. Supabase is only storage for photos, ride rows, and `ai_summary`; it should not run the image-processing workflow.
+For v1, AI processing is intentionally post-ride on the Raspberry Pi instead of always-on real-time inference. Supabase is only storage for manual photos, automated photo metadata, ride rows, and `ai_summary`; it should not run the image-processing workflow.
 
 ## Button + 8-LED Strip Wiring
 
@@ -99,6 +99,7 @@ Run `supabase/blindspot_device_schema.sql` in the Supabase SQL editor first. The
 export BLINDSPOT_SUPABASE_URL="https://PROJECT_REF.supabase.co"
 export BLINDSPOT_SUPABASE_KEY="..."
 export BLINDSPOT_SUPABASE_BUCKET="photos"
+export BLINDSPOT_SUPABASE_AUTOMATED_PHOTOS_TABLE="automated_photos"
 export BLINDSPOT_USER_ID="..."
 export BLINDSPOT_PHONE_BASE_URL="http://172.20.10.1:8787"
 export HACKCLUB_AI_API_KEY="..."
@@ -111,7 +112,7 @@ Hold the button to start a ride. If `BLINDSPOT_PHONE_BASE_URL` is set, the Pi se
 
 Single-click captures a user/manual photo, uploads it to Storage, and inserts a row into `photos` with `ride_id` pointing at the active row in `rides`. The Pi refuses to upload a photo unless it has a real `ride_id`; no orphan `photos` rows should be created.
 
-Only user/manual photos go to Supabase Storage and `photos`. Automatic interval frames for Qwen or other analysis stay local on the Pi and may be referenced from local SQLite for the post-ride AI pass, but they are not uploaded to Supabase as photos.
+Only user/manual photos go into the `photos` table. Machine-triggered captures such as `impact`, `hard_brake`, `swerve`, `crash`, or Qwen interval frames upload under the same Storage bucket but insert rows into `automated_photos` instead. Automated rows also require a real `ride_id`, so every uploaded image remains tied to the active ride.
 
 When a ride stops, the Pi computes ride distance/duration/photo count from its local SQLite `ride_points` and `events`, sends the ride photos directly from the Pi to Hack Club AI Qwen when `HACKCLUB_AI_API_KEY` is set, and writes the summary back to Supabase. The summary is saved both on the separate `rides` table row for that ride and as a history row in `ai_summary`. The Qwen prompt specifically checks for green bike lanes/paths, bicycle pavement symbols, protected/painted/missing bike lanes, blocked lanes, potholes, cracks, debris, dangerous shoulders, and rough surface conditions. Set `BLINDSPOT_HACKCLUB_AI_MAX_IMAGES` to control how many ride images are attached; the default is `24`.
 
