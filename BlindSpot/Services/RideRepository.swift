@@ -21,4 +21,10 @@ protocol RideRepository {
 
     /// Update a ride's 1–5 star rating (Recap screen calls this).
     func setRating(rideId: UUID, rating: Int) async throws
+
+    /// Star/unstar a ride.
+    func setFavorite(rideId: UUID, favorite: Bool) async throws
+
+    /// Permanently delete a ride (and its points/events).
+    func deleteRide(id: UUID) async throws
 }

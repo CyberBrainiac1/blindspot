@@ -13,6 +13,9 @@
 import Foundation
 
 protocol HazardRepository {
-    /// All known hazards (the map reads these).
+    /// All known hazards (the map reads these). Crowd-sourced across riders.
     func fetchHazards() async throws -> [Hazard]
+
+    /// Report a new hazard (e.g. when the rider flags one during a ride).
+    func reportHazard(_ hazard: Hazard) async throws
 }

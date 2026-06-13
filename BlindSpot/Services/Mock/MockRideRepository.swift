@@ -50,4 +50,13 @@ final class MockRideRepository: RideRepository {
         // Clamp to the valid 1...5 range defensively.
         bundles[index].ride.rating = min(5, max(1, rating))
     }
+
+    func setFavorite(rideId: UUID, favorite: Bool) async throws {
+        guard let index = bundles.firstIndex(where: { $0.ride.id == rideId }) else { return }
+        bundles[index].ride.favorite = favorite
+    }
+
+    func deleteRide(id: UUID) async throws {
+        bundles.removeAll { $0.ride.id == id }
+    }
 }

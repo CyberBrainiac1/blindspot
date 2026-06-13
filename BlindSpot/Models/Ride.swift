@@ -17,6 +17,7 @@ struct Ride: Codable, Identifiable, Hashable {
     var avgSpeed: Double          // meters/second
     var safetyScore: Int?         // 0–100, set by the future scoring service
     var rating: Int?              // 1–5, set by the rider
+    var favorite: Bool            // starred by the rider
 
     init(
         id: UUID = UUID(),
@@ -26,7 +27,8 @@ struct Ride: Codable, Identifiable, Hashable {
         durationSeconds: Double,
         avgSpeed: Double,
         safetyScore: Int? = nil,
-        rating: Int? = nil
+        rating: Int? = nil,
+        favorite: Bool = false
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -36,5 +38,6 @@ struct Ride: Codable, Identifiable, Hashable {
         self.avgSpeed = avgSpeed
         self.safetyScore = safetyScore
         self.rating = rating
+        self.favorite = favorite
     }
 }

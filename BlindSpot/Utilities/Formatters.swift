@@ -2,25 +2,25 @@
 //  Formatters.swift
 //  Blind Spot
 //
-//  Small, shared formatting helpers so telemetry reads consistently everywhere
-//  (km, km/h, mm:ss, dates). Kept pure + dependency-free.
-//
-//  Note: we display metric (km, km/h). Switching to imperial later is a localized
-//  concern we can layer on; for the foundation we keep it simple and consistent.
+//  Small, shared formatting helpers so telemetry reads consistently everywhere.
+//  Units are imperial (miles, mph) — Blind Spot is US-first.
 //
 
 import Foundation
 
 enum Format {
 
-    /// Meters → kilometers string, 1 decimal place. e.g. 2540 -> "2.5".
-    static func km(_ meters: Double) -> String {
-        String(format: "%.1f", meters / 1000)
+    private static let metersPerMile = 1609.344
+    private static let mphPerMPS = 2.2369362921   // (m/s) → mph
+
+    /// Meters → miles string, 1 decimal place. e.g. 2540 -> "1.6".
+    static func miles(_ meters: Double) -> String {
+        String(format: "%.1f", meters / metersPerMile)
     }
 
-    /// meters/second → km/h, rounded to a whole number. e.g. 6.1 -> "22".
-    static func kmh(_ metersPerSecond: Double) -> String {
-        String(format: "%.0f", metersPerSecond * 3.6)
+    /// meters/second → mph, whole number. Negative (invalid GPS speed) -> "0".
+    static func mph(_ metersPerSecond: Double) -> String {
+        String(format: "%.0f", max(0, metersPerSecond) * mphPerMPS)
     }
 
     /// Seconds → "M:SS" or "H:MM:SS". e.g. 642 -> "10:42".

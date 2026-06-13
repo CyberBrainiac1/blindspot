@@ -30,30 +30,34 @@ struct MapScreen: View {
         NavigationStack {
             ZStack(alignment: .bottomLeading) {
 
-                // MARK: Map with hazard annotations
+                // MARK: Map with hazard annotations + the rider's live location
                 Map(position: $cameraPosition) {
+                    // The blue user-location dot (requires location permission).
+                    UserAnnotation()
+
                     ForEach(viewModel.hazards) { hazard in
                         Annotation(
                             hazard.type.displayName,
                             coordinate: CLLocationCoordinate2D(latitude: hazard.lat, longitude: hazard.lng)
                         ) {
-                            HazardBadge(type: hazard.type, severity: hazard.severity, style: .pin)
+                            HazardBadge(type: hazard.type, style: .pin)
                         }
                     }
                 }
                 .mapStyle(.standard(elevation: .flat))
+                .mapControls {
+                    MapUserLocationButton()   // recenter on the rider
+                    MapCompass()
+                }
                 .ignoresSafeArea(edges: .top)
-
-                // MARK: Legend (color is paired with icon + label — never color-only)
-                legend
-                    .padding(16)
             }
             .navigationTitle("Hazard Map")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.bsCharcoal, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            // Kick off the fetch when the screen appears.
+            // Kick off the fetch + ask for location so the user dot can show.
             .task {
+                environment.locationService.requestAuthorization()
                 await viewModel.load(using: environment.hazardRepository)
             }
             .overlay {
@@ -64,39 +68,10 @@ struct MapScreen: View {
         }
     }
 
-    // MARK: - Legend
-
-    private var legend: some View {
-        BSCard(padding: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("SEVERITY")
-                    .font(.bsCaption)
-                    .tracking(1.2)
-                    .foregroundStyle(Color.bsWhite.opacity(0.6))
-
-                ForEach(Severity.allCases) { severity in
-                    HStack(spacing: 8) {
-                        Image(systemName: severity.symbolName)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(severity.color)
-                            .frame(width: 16)
-                        Text(severity.displayName)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Color.bsWhite)
-                    }
-                }
-            }
-        }
-        // Keep the legend compact in the corner.
-        .frame(width: 150)
-    }
 }
 
 #Preview {
     MapScreen()
-        .environment(AppEnvironment(
-            hazardRepository: MockHazardRepository(),
-            rideRepository: MockRideRepository()
-        ))
+        .environment(AppEnvironment.preview)
         .preferredColorScheme(.dark)
 }

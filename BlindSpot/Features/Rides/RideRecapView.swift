@@ -153,11 +153,11 @@ struct RideRecapView: View {
         BSCard {
             VStack(spacing: 20) {
                 HStack(spacing: 12) {
-                    StatTile(value: Format.km(ride.distanceMeters), label: "Distance", unit: "km")
+                    StatTile(value: Format.miles(ride.distanceMeters), label: "Distance", unit: "mi")
                     StatTile(value: Format.duration(ride.durationSeconds), label: "Duration")
                 }
                 HStack(spacing: 12) {
-                    StatTile(value: Format.kmh(ride.avgSpeed), label: "Avg Speed", unit: "km/h")
+                    StatTile(value: Format.mph(ride.avgSpeed), label: "Avg Speed", unit: "mph")
                     StatTile(value: "\(viewModel.hazardCount)", label: "Hazards")
                 }
                 HStack(spacing: 12) {
@@ -238,9 +238,6 @@ struct RideRecapView: View {
     NavigationStack {
         RideRecapView(rideId: SampleData.makeRides()[0].ride.id)
     }
-    .environment(AppEnvironment(
-        hazardRepository: MockHazardRepository(),
-        rideRepository: MockRideRepository()
-    ))
+    .environment(AppEnvironment.preview)
     .preferredColorScheme(.dark)
 }

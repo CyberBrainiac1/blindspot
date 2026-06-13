@@ -2,77 +2,129 @@
 //  AppEnvironment.swift
 //  Blind Spot
 //
-//  The dependency container — THE single seam for the future data layer.
+//  The dependency container + composition root. Holds every service behind its
+//  protocol so the rest of the app is decoupled from concrete implementations
+//  (Firebase, Supabase, CoreLocation, CoreMotion). It also owns session state:
+//  the signed-in user's `profile`, loaded from Supabase.
 //
-//  It holds the repositories as their PROTOCOL types (`HazardRepository`,
-//  `RideRepository`), so the concrete implementation is invisible to the rest of
-//  the app. Today they're the mocks; later they become Supabase-backed. Swapping
-//  is a one-line change in `BlindSpotApp` — no view or view-model edits.
+//  Two factories:
+//   - `live()`    — real Firebase + Supabase + CoreLocation/CoreMotion.
+//   - `preview`   — all mocks, for SwiftUI previews (never touches Firebase).
 //
-//  It also holds the local rider `profile` and the `hasCompletedOnboarding`
-//  flag, both LIGHTLY persisted to UserDefaults so the app remembers the rider
-//  across launches. (Real server-side persistence + auth arrive later; this is
-//  just enough to not re-run onboarding every launch.)
-//
-//  It is `@Observable` and injected via `.environment(...)`, so any view reads it
-//  with `@Environment(AppEnvironment.self) var environment`.
+//  `@MainActor` because it publishes UI state and coordinates main-actor services.
 //
 
 import Foundation
 import Observation
+import FirebaseAuth   // composition root only: builds the Supabase token closure
 
+@MainActor
 @Observable
 final class AppEnvironment {
 
-    /// Source of crowd-sourced hazards (Map screen).
+    // MARK: Services (protocols — the seams)
+
     let hazardRepository: HazardRepository
-
-    /// Source of ride summaries + detail (Rides, Recap, Record screens).
     let rideRepository: RideRepository
+    let profileRepository: ProfileRepository
+    let authService: AuthService
+    let locationService: LocationService
+    let motionService: MotionService
 
-    /// The local rider profile. Mutations are persisted to UserDefaults via
-    /// `didSet` so they survive relaunch.
-    var profile: Profile {
-        didSet { persistProfile() }
-    }
+    // MARK: Session state
 
-    /// Whether the rider has finished the onboarding flow. Drives the root view.
-    var hasCompletedOnboarding: Bool {
-        didSet {
-            UserDefaults.standard.set(hasCompletedOnboarding, forKey: Keys.onboarded)
-        }
-    }
+    /// The signed-in rider's profile, loaded from Supabase. Nil when signed out
+    /// or before onboarding has created a row.
+    var profile: Profile?
+    private(set) var isLoadingProfile = false
 
     init(
         hazardRepository: HazardRepository,
-        rideRepository: RideRepository
+        rideRepository: RideRepository,
+        profileRepository: ProfileRepository,
+        authService: AuthService,
+        locationService: LocationService,
+        motionService: MotionService
     ) {
         self.hazardRepository = hazardRepository
         self.rideRepository = rideRepository
-
-        // Restore persisted state (if any) so we resume where the rider left off.
-        self.profile = AppEnvironment.loadProfile() ?? Profile()
-        self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: Keys.onboarded)
+        self.profileRepository = profileRepository
+        self.authService = authService
+        self.locationService = locationService
+        self.motionService = motionService
     }
 
-    // MARK: - Local persistence (UserDefaults)
-    //
-    // NOTE: This is intentionally minimal. When the data layer lands, profile
-    // storage moves server-side and these helpers go away.
+    // MARK: Session helpers
 
-    private enum Keys {
-        static let profile = "bs.profile"
-        static let onboarded = "bs.hasCompletedOnboarding"
+    /// True once we know the user is signed in but has no profile yet.
+    var needsOnboarding: Bool {
+        authService.isSignedIn && profile == nil && !isLoadingProfile
     }
 
-    private func persistProfile() {
-        if let data = try? JSONEncoder().encode(profile) {
-            UserDefaults.standard.set(data, forKey: Keys.profile)
+    /// Load the current user's profile from Supabase. Called when auth state
+    /// changes (see RootView).
+    func refreshProfile() async {
+        guard let uid = authService.currentUserId else {
+            profile = nil
+            return
+        }
+        isLoadingProfile = true
+        defer { isLoadingProfile = false }
+        do {
+            profile = try await profileRepository.fetchProfile(userId: uid)
+        } catch {
+            // Network/RLS error — treat as "no profile loaded" for now.
+            profile = nil
         }
     }
 
-    private static func loadProfile() -> Profile? {
-        guard let data = UserDefaults.standard.data(forKey: Keys.profile) else { return nil }
-        return try? JSONDecoder().decode(Profile.self, from: data)
+    /// Persist a profile (onboarding / profile edits) and update local state.
+    func saveProfile(_ profile: Profile) async throws {
+        try await profileRepository.upsertProfile(profile)
+        self.profile = profile
+    }
+
+    func signOut() {
+        try? authService.signOut()
+        profile = nil
+    }
+
+    // MARK: - Factories
+
+    /// Real services: Firebase auth, Supabase data, live CoreLocation/CoreMotion.
+    static func live() -> AppEnvironment {
+        let auth = FirebaseAuthService()
+
+        // Supabase authenticates each request with the current Firebase ID token
+        // (Third-Party Auth). Reads Firebase directly so the closure captures
+        // nothing non-Sendable.
+        let client = SupabaseClientProvider.make(tokenProvider: {
+            guard let user = Auth.auth().currentUser else { return nil }
+            return try? await user.getIDToken()
+        })
+
+        // Row owner for Supabase writes = the Firebase UID.
+        let uid: @Sendable () -> String? = { Auth.auth().currentUser?.uid }
+
+        return AppEnvironment(
+            hazardRepository: SupabaseHazardRepository(client: client, userId: uid),
+            rideRepository: SupabaseRideRepository(client: client, userId: uid),
+            profileRepository: SupabaseProfileRepository(client: client),
+            authService: auth,
+            locationService: LiveLocationService(),
+            motionService: LiveMotionService()
+        )
+    }
+
+    /// All-mock environment for SwiftUI previews.
+    static var preview: AppEnvironment {
+        AppEnvironment(
+            hazardRepository: MockHazardRepository(),
+            rideRepository: MockRideRepository(),
+            profileRepository: MockProfileRepository(),
+            authService: MockAuthService(userId: "preview-user", email: "rider@example.com"),
+            locationService: MockLocationService(),
+            motionService: MockMotionService()
+        )
     }
 }

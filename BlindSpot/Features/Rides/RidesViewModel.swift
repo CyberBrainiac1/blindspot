@@ -26,4 +26,30 @@ final class RidesViewModel {
         }
         isLoading = false
     }
+
+    /// Star/unstar a ride. Optimistic; reverts on failure.
+    func toggleFavorite(id: UUID, using repository: RideRepository) async {
+        guard let index = rides.firstIndex(where: { $0.id == id }) else { return }
+        let newValue = !rides[index].favorite
+        rides[index].favorite = newValue
+        do {
+            try await repository.setFavorite(rideId: id, favorite: newValue)
+        } catch {
+            rides[index].favorite = !newValue
+            errorMessage = "Couldn't update favorite."
+        }
+    }
+
+    /// Delete a ride. Optimistically removes it from the list, then deletes
+    /// server-side; reloads on failure to restore the true state.
+    func delete(id: UUID, using repository: RideRepository) async {
+        let previous = rides
+        rides.removeAll { $0.id == id }
+        do {
+            try await repository.deleteRide(id: id)
+        } catch {
+            rides = previous
+            errorMessage = "Couldn't delete that ride."
+        }
+    }
 }

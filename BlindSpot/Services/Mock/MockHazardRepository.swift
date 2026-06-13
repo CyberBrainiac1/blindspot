@@ -24,4 +24,8 @@ final class MockHazardRepository: HazardRepository {
         // for snappy previews. The real impl will actually await a request.
         return hazards
     }
+
+    func reportHazard(_ hazard: Hazard) async throws {
+        hazards.append(hazard)
+    }
 }

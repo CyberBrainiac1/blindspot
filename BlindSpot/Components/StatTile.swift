@@ -14,7 +14,7 @@ struct StatTile: View {
     let value: String
     /// The small label under it (e.g. "KM", "DURATION"). Rendered uppercase.
     let label: String
-    /// Optional unit shown small next to the value (e.g. "km/h").
+    /// Optional unit shown small next to the value (e.g. "mph").
     var unit: String? = nil
     /// Optional accent for the value (defaults to brand yellow).
     var valueColor: Color = .bsPrimary
@@ -46,9 +46,9 @@ struct StatTile: View {
     ZStack {
         Color.bsBlack.ignoresSafeArea()
         HStack {
-            StatTile(value: "12.4", label: "Distance", unit: "km")
+            StatTile(value: "12.4", label: "Distance", unit: "mi")
             StatTile(value: "00:42", label: "Duration")
-            StatTile(value: "22", label: "Avg Speed", unit: "km/h")
+            StatTile(value: "22", label: "Avg Speed", unit: "mph")
         }
         .padding()
     }

@@ -12,6 +12,8 @@ struct RideListView: View {
 
     @Environment(AppEnvironment.self) private var environment
     @State private var viewModel = RidesViewModel()
+    // The ride pending a delete-confirmation.
+    @State private var rideToDelete: UUID?
 
     var body: some View {
         NavigationStack {
@@ -21,22 +23,61 @@ struct RideListView: View {
                 if viewModel.rides.isEmpty && !viewModel.isLoading {
                     emptyState
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(viewModel.rides) { ride in
-                                NavigationLink(value: ride.id) {
-                                    RideRow(ride: ride)
+                    // A List (not ScrollView) so we get native swipe actions,
+                    // themed to the dark design system.
+                    List {
+                        ForEach(viewModel.rides) { ride in
+                            NavigationLink(value: ride.id) {
+                                RideRow(ride: ride)
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                            // Swipe LEFT (trailing edge) → Favorite / Delete.
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    rideToDelete = ride.id
+                                } label: {
+                                    Label("Delete", systemImage: "trash.fill")
                                 }
-                                .buttonStyle(.plain)
+
+                                Button {
+                                    Task {
+                                        await viewModel.toggleFavorite(
+                                            id: ride.id, using: environment.rideRepository)
+                                    }
+                                } label: {
+                                    Label(ride.favorite ? "Unfavorite" : "Favorite",
+                                          systemImage: ride.favorite ? "star.slash.fill" : "star.fill")
+                                }
+                                .tint(.bsPrimary)
                             }
                         }
-                        .padding(16)
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
                 }
             }
             .navigationTitle("Rides")
             .toolbarBackground(Color.bsCharcoal, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            // Confirm before deleting.
+            .confirmationDialog(
+                "Delete this ride?",
+                isPresented: Binding(get: { rideToDelete != nil },
+                                     set: { if !$0 { rideToDelete = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let id = rideToDelete {
+                        Task { await viewModel.delete(id: id, using: environment.rideRepository) }
+                    }
+                    rideToDelete = nil
+                }
+                Button("Cancel", role: .cancel) { rideToDelete = nil }
+            } message: {
+                Text("This permanently removes the ride and its route.")
+            }
             // Push the recap, keyed by ride id (the recap re-fetches detail).
             .navigationDestination(for: UUID.self) { rideId in
                 RideRecapView(rideId: rideId)
@@ -81,7 +122,13 @@ private struct RideRow: View {
     var body: some View {
         BSCard {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
+                HStack(spacing: 8) {
+                    // Favorite star (filled when starred).
+                    if ride.favorite {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Color.bsPrimary)
+                    }
                     Text(Format.rideDate(ride.startedAt))
                         .font(.bsHeadline)
                         .foregroundStyle(Color.bsWhite)
@@ -90,9 +137,9 @@ private struct RideRow: View {
                 }
 
                 HStack(spacing: 24) {
-                    rowStat(value: Format.km(ride.distanceMeters), unit: "km", label: "Distance")
+                    rowStat(value: Format.miles(ride.distanceMeters), unit: "mi", label: "Distance")
                     rowStat(value: Format.duration(ride.durationSeconds), unit: nil, label: "Duration")
-                    rowStat(value: Format.kmh(ride.avgSpeed), unit: "km/h", label: "Avg")
+                    rowStat(value: Format.mph(ride.avgSpeed), unit: "mph", label: "Avg")
                 }
 
                 // Show the rider's star rating if present.
@@ -165,9 +212,6 @@ struct SafetyScoreBadge: View {
 
 #Preview {
     RideListView()
-        .environment(AppEnvironment(
-            hazardRepository: MockHazardRepository(),
-            rideRepository: MockRideRepository()
-        ))
+        .environment(AppEnvironment.preview)
         .preferredColorScheme(.dark)
 }

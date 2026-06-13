@@ -27,3 +27,10 @@ DerivedData/
 
 # --- Misc local ---
 *.log
+
+# --- Secrets / keys (never commit) ---
+# Firebase iOS config (contains your API key & client IDs).
+GoogleService-Info.plist
+**/GoogleService-Info.plist
+# Supabase URL + anon key. Use Secrets.example.swift as the template.
+BlindSpot/Config/Secrets.swift

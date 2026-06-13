@@ -44,7 +44,7 @@ struct RecordRideView: View {
                     CrashSOSOverlay(
                         countdown: viewModel.sosCountdown,
                         sent: viewModel.sosSent,
-                        emergencyContact: environment.profile.emergencyContact,
+                        emergencyContact: environment.profile?.emergencyContact,
                         onDismiss: { viewModel.dismissSOS() }
                     )
                 }
@@ -52,31 +52,40 @@ struct RecordRideView: View {
             // Haptic each time an event is flagged (count goes up). iOS 17 API.
             .sensoryFeedback(.success, trigger: viewModel.events.count)
             .animation(.easeInOut, value: viewModel.sosActive)
+            // Ask for location up front so the first ride has GPS immediately.
+            .task { environment.locationService.requestAuthorization() }
         }
     }
 
     // MARK: - Idle
 
     private var idleState: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 28) {
             Spacer()
-            Image(systemName: "bicycle")
-                .font(.system(size: 64, weight: .bold))
-                .foregroundStyle(Color.bsPrimary)
-            Text("Ready to ride")
-                .font(.bsTitle)
-                .foregroundStyle(Color.bsWhite)
-            Text("Mount your phone and start recording. Telemetry is simulated in this build.")
-                .font(.bsBody)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(Color.bsWhite.opacity(0.6))
-                .padding(.horizontal, 32)
-            Spacer()
-            PrimaryButton(title: "START RIDE", systemImage: "record.circle") {
-                viewModel.start()
+
+            // The big, central, tap-to-start control.
+            BigStartButton {
+                viewModel.start(
+                    location: environment.locationService,
+                    motion: environment.motionService,
+                    hazards: environment.hazardRepository
+                )
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
+
+            Text("Tap to start your ride")
+                .font(.bsBody)
+                .foregroundStyle(Color.bsWhite.opacity(0.6))
+
+            // Hint if location is denied — GPS is required for a real ride.
+            if environment.locationService.authorizationStatus == .denied {
+                Text("Location is off. Enable it in Settings to record rides.")
+                    .font(.bsCaption)
+                    .foregroundStyle(Color.bsModerate)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
+
+            Spacer()
         }
     }
 
@@ -88,16 +97,17 @@ struct RecordRideView: View {
             BSCard {
                 VStack(spacing: 20) {
                     HStack(spacing: 12) {
+                        StatTile(value: Format.mph(viewModel.currentSpeedMPS),
+                                 label: "Speed", unit: "mph")
                         StatTile(value: Format.duration(Double(viewModel.elapsedSeconds)),
                                  label: "Time")
-                        StatTile(value: Format.km(viewModel.distanceMeters),
-                                 label: "Distance", unit: "km")
                     }
                     HStack(spacing: 12) {
-                        StatTile(value: Format.kmh(viewModel.currentSpeed),
-                                 label: "Speed", unit: "km/h")
-                        StatTile(value: "\(viewModel.events.count)",
-                                 label: "Flags")
+                        StatTile(value: Format.miles(viewModel.distanceMeters),
+                                 label: "Distance", unit: "mi")
+                        // Peak IMU magnitude this ride — proves the accelerometer is live.
+                        StatTile(value: String(format: "%.1f", viewModel.peakIMU),
+                                 label: "Peak G", unit: "g")
                     }
                 }
             }
@@ -127,6 +137,15 @@ struct RecordRideView: View {
             .animation(.easeInOut, value: viewModel.flagConfirmation)
 
             Spacer()
+
+            // Surface a save failure instead of dropping the ride silently.
+            if let saveError = viewModel.saveError {
+                Text(saveError)
+                    .font(.bsCaption)
+                    .foregroundStyle(Color.bsSevere)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
 
             // Stop + debug crash controls.
             VStack(spacing: 12) {
@@ -164,11 +183,48 @@ struct RecordRideView: View {
     }
 }
 
+// MARK: - Big start button
+
+/// The large, central orange circle that starts a ride. Big tap target,
+/// pressed state darkens + scales.
+private struct BigStartButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: "figure.outdoor.cycle")
+                    .font(.system(size: 64, weight: .heavy))
+                Text("START")
+                    .font(.custom(BSFont.monoBold, size: 22))
+                    .tracking(3)
+            }
+            .foregroundStyle(Color.bsBlack)
+            .frame(width: 240, height: 240)
+        }
+        .buttonStyle(BigStartButtonStyle())
+        .accessibilityLabel("Start ride")
+    }
+}
+
+private struct BigStartButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                Circle().fill(configuration.isPressed ? Color.bsPrimaryDeep : Color.bsPrimary)
+            )
+            // Soft halo so it reads as the focal point.
+            .overlay(
+                Circle().stroke(Color.bsPrimaryBright.opacity(0.4), lineWidth: 6)
+            )
+            .shadow(color: Color.bsPrimary.opacity(0.5), radius: 24)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
 #Preview {
     RecordRideView()
-        .environment(AppEnvironment(
-            hazardRepository: MockHazardRepository(),
-            rideRepository: MockRideRepository()
-        ))
+        .environment(AppEnvironment.preview)
         .preferredColorScheme(.dark)
 }

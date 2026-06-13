@@ -3,10 +3,9 @@
 //  Blind Spot
 //
 //  The Profile tab: the rider details collected at onboarding (name, email,
-//  phone, skill, weekly frequency) plus the emergency contact, all editable and
-//  written back to the shared `AppEnvironment.profile` (persisted locally).
-//
-//  A disabled "Sign out" placeholder notes that auth arrives with the data layer.
+//  phone, skill, weekly frequency) plus the emergency contact, all editable.
+//  Edits update the in-memory profile and are saved to Supabase when leaving
+//  the tab. Includes a working Sign Out.
 //
 
 import SwiftUI
@@ -16,18 +15,15 @@ struct ProfileView: View {
     @Environment(AppEnvironment.self) private var environment
 
     var body: some View {
-        // Bindable so we can two-way bind directly to the persisted profile.
-        @Bindable var env = environment
-
-        return NavigationStack {
+        NavigationStack {
             ZStack {
                 Color.bsBlack.ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        identityCard(env: env)
-                        ridingCard(env: env)
-                        emergencyCard(env: env)
+                        identityCard
+                        ridingCard
+                        emergencyCard
                         accountCard
                     }
                     .padding(16)
@@ -36,56 +32,57 @@ struct ProfileView: View {
             .navigationTitle("Profile")
             .toolbarBackground(Color.bsCharcoal, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            // Persist any edits to Supabase when the user leaves this tab.
+            .onDisappear {
+                if let profile = environment.profile {
+                    Task { try? await environment.saveProfile(profile) }
+                }
+            }
         }
     }
 
     // MARK: Identity (name / email / phone)
 
-    private func identityCard(env: AppEnvironment) -> some View {
+    private var identityCard: some View {
         BSCard {
             VStack(alignment: .leading, spacing: 18) {
-                labeledField(
-                    "DISPLAY NAME", placeholder: "Your name",
-                    text: bindingFor(env, \.displayName),
-                    font: .bsHeadline, keyboard: .default, autocap: .words)
+                labeledField("DISPLAY NAME", placeholder: "Your name",
+                             text: bindingFor(\.displayName),
+                             font: .bsHeadline, keyboard: .default, autocap: .words)
 
                 Divider().overlay(Color.bsWhite.opacity(0.1))
 
-                labeledField(
-                    "EMAIL", placeholder: "you@example.com",
-                    text: bindingFor(env, \.email),
-                    font: .bsBody, keyboard: .emailAddress, autocap: .never)
+                labeledField("EMAIL", placeholder: "you@example.com",
+                             text: bindingFor(\.email),
+                             font: .bsBody, keyboard: .emailAddress, autocap: .never)
 
                 Divider().overlay(Color.bsWhite.opacity(0.1))
 
-                labeledField(
-                    "PHONE", placeholder: "(555) 123-4567",
-                    text: bindingFor(env, \.phone),
-                    font: .bsBody, keyboard: .phonePad, autocap: .never)
+                labeledField("PHONE", placeholder: "(555) 123-4567",
+                             text: bindingFor(\.phone),
+                             font: .bsBody, keyboard: .phonePad, autocap: .never)
             }
         }
     }
 
     // MARK: Riding (skill / frequency)
 
-    private func ridingCard(env: AppEnvironment) -> some View {
+    private var ridingCard: some View {
         BSCard {
             VStack(alignment: .leading, spacing: 18) {
-                // Skill level — a menu of the enum cases.
                 pickerRow(label: "SKILL LEVEL",
-                          current: env.profile.skillLevel?.displayName ?? "Not set") {
+                          current: environment.profile?.skillLevel?.displayName ?? "Not set") {
                     ForEach(BikingSkill.allCases) { option in
-                        Button(option.displayName) { env.profile.skillLevel = option }
+                        Button(option.displayName) { environment.profile?.skillLevel = option }
                     }
                 }
 
                 Divider().overlay(Color.bsWhite.opacity(0.1))
 
-                // Weekly frequency.
                 pickerRow(label: "RIDES PER WEEK",
-                          current: env.profile.weeklyFrequency?.displayName ?? "Not set") {
+                          current: environment.profile?.weeklyFrequency?.displayName ?? "Not set") {
                     ForEach(RideFrequency.allCases) { option in
-                        Button(option.displayName) { env.profile.weeklyFrequency = option }
+                        Button(option.displayName) { environment.profile?.weeklyFrequency = option }
                     }
                 }
             }
@@ -94,13 +91,12 @@ struct ProfileView: View {
 
     // MARK: Emergency contact
 
-    private func emergencyCard(env: AppEnvironment) -> some View {
+    private var emergencyCard: some View {
         BSCard {
             VStack(alignment: .leading, spacing: 12) {
-                labeledField(
-                    "EMERGENCY CONTACT", placeholder: "Name & phone",
-                    text: bindingFor(env, \.emergencyContact),
-                    font: .bsBody, keyboard: .phonePad, autocap: .words)
+                labeledField("EMERGENCY CONTACT", placeholder: "Name & phone",
+                             text: bindingFor(\.emergencyContact),
+                             font: .bsBody, keyboard: .phonePad, autocap: .words)
 
                 Text("Used by the crash-SOS flow to know who to alert.")
                     .font(.system(size: 12))
@@ -109,7 +105,7 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: Account / auth placeholder
+    // MARK: Account
 
     private var accountCard: some View {
         BSCard {
@@ -119,27 +115,23 @@ struct ProfileView: View {
                     .tracking(1.2)
                     .foregroundStyle(Color.bsWhite.opacity(0.6))
 
-                Button { /* no-op */ } label: {
+                if let email = environment.authService.currentEmail {
+                    Text(email)
+                        .font(.bsBody)
+                        .foregroundStyle(Color.bsWhite.opacity(0.7))
+                }
+
+                Button(role: .destructive) {
+                    // Persist edits, then sign out.
+                    if let profile = environment.profile {
+                        Task { try? await environment.saveProfile(profile) }
+                    }
+                    environment.signOut()
+                } label: {
                     Text("Sign out")
                         .font(.bsBody)
-                        .foregroundStyle(Color.bsWhite.opacity(0.4))
+                        .foregroundStyle(Color.bsSevere)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .disabled(true)
-
-                Text("Sign-in & accounts arrive with the data layer.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.bsWhite.opacity(0.4))
-
-                Divider().overlay(Color.bsWhite.opacity(0.1))
-
-                // Debug affordance: re-run the onboarding flow.
-                Button {
-                    environment.hasCompletedOnboarding = false
-                } label: {
-                    Label("Replay onboarding", systemImage: "arrow.counterclockwise")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.bsPrimary)
                 }
             }
         }
@@ -147,7 +139,6 @@ struct ProfileView: View {
 
     // MARK: - Reusable bits
 
-    /// A labeled text field that reads/writes a String? field on the profile.
     private func labeledField(
         _ label: String,
         placeholder: String,
@@ -171,7 +162,6 @@ struct ProfileView: View {
         }
     }
 
-    /// A label + a menu that shows the current value and lets the user change it.
     private func pickerRow<Content: View>(
         label: String,
         current: String,
@@ -198,17 +188,13 @@ struct ProfileView: View {
         }
     }
 
-    /// Bridge a `String?` profile field to a non-optional `Binding<String>` for
-    /// TextField, writing nil back when emptied.
-    private func bindingFor(
-        _ env: AppEnvironment,
-        _ keyPath: WritableKeyPath<Profile, String?>
-    ) -> Binding<String> {
+    /// Bridge a `String?` field on the (optional) profile to a `Binding<String>`.
+    private func bindingFor(_ keyPath: WritableKeyPath<Profile, String?>) -> Binding<String> {
         Binding(
-            get: { env.profile[keyPath: keyPath] ?? "" },
+            get: { environment.profile?[keyPath: keyPath] ?? "" },
             set: { newValue in
                 let trimmed = newValue.trimmingCharacters(in: .whitespaces)
-                env.profile[keyPath: keyPath] = trimmed.isEmpty ? nil : newValue
+                environment.profile?[keyPath: keyPath] = trimmed.isEmpty ? nil : newValue
             }
         )
     }
@@ -216,9 +202,6 @@ struct ProfileView: View {
 
 #Preview {
     ProfileView()
-        .environment(AppEnvironment(
-            hazardRepository: MockHazardRepository(),
-            rideRepository: MockRideRepository()
-        ))
+        .environment(AppEnvironment.preview)
         .preferredColorScheme(.dark)
 }

@@ -40,6 +40,10 @@ final class OnboardingViewModel {
     var skill: BikingSkill?
     var frequency: RideFrequency?
 
+    /// Set while the final profile is being written to Supabase.
+    private(set) var isSaving = false
+    private(set) var saveError: String?
+
     // MARK: - Progress
 
     /// 0...1 progress across the FORM steps (welcome contributes 0).
@@ -78,18 +82,40 @@ final class OnboardingViewModel {
         step = Step(rawValue: prev) ?? step
     }
 
-    /// Build the profile and persist it, flipping the environment to the main app.
-    func finish(into environment: AppEnvironment) {
-        // Preserve any existing emergency contact / id already on the profile.
-        var profile = environment.profile
-        profile.displayName = name.trimmingCharacters(in: .whitespaces)
-        profile.email = email.trimmingCharacters(in: .whitespaces)
-        profile.phone = phone.trimmingCharacters(in: .whitespaces)
-        profile.skillLevel = skill
-        profile.weeklyFrequency = frequency
+    /// Prefill from the signed-in Firebase user (Google gives name + email;
+    /// email sign-up gives email). Only fills empty fields.
+    func prefill(from auth: AuthService) {
+        if name.isEmpty, let displayName = auth.currentDisplayName { name = displayName }
+        if email.isEmpty, let userEmail = auth.currentEmail { email = userEmail }
+    }
 
-        environment.profile = profile
-        environment.hasCompletedOnboarding = true
+    /// Build the profile (keyed by Firebase UID) and persist it to Supabase.
+    /// On success, `environment.profile` is set, which routes into the main app.
+    func finish(into environment: AppEnvironment) async {
+        guard let uid = environment.authService.currentUserId else {
+            saveError = "Not signed in."
+            return
+        }
+
+        let profile = Profile(
+            id: uid,
+            displayName: name.trimmingCharacters(in: .whitespaces),
+            email: email.trimmingCharacters(in: .whitespaces),
+            phone: phone.trimmingCharacters(in: .whitespaces),
+            skillLevel: skill,
+            weeklyFrequency: frequency,
+            // Preserve an emergency contact if one was somehow already set.
+            emergencyContact: environment.profile?.emergencyContact
+        )
+
+        isSaving = true
+        saveError = nil
+        defer { isSaving = false }
+        do {
+            try await environment.saveProfile(profile)
+        } catch {
+            saveError = "Couldn't save your profile. Check your connection and try again."
+        }
     }
 
     // MARK: - Lightweight validation

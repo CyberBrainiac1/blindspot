@@ -61,11 +61,21 @@ struct OnboardingView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
+                if let error = viewModel.saveError {
+                    Text(error)
+                        .font(.bsCaption)
+                        .foregroundStyle(Color.bsSevere)
+                        .multilineTextAlignment(.center)
+                        .padding(.bottom, 8)
+                }
+
                 footer
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 16)
         }
+        // Prefill name/email from the signed-in account.
+        .onAppear { viewModel.prefill(from: environment.authService) }
         // Animate transitions between steps.
         .animation(.easeInOut(duration: 0.25), value: viewModel.step)
     }
@@ -221,20 +231,24 @@ struct OnboardingView: View {
         }
     }
 
+    private var footerTitle: String {
+        if viewModel.isLastStep { return viewModel.isSaving ? "SAVING…" : "GET STARTED" }
+        return viewModel.isFirstStep ? "GET STARTED" : "CONTINUE"
+    }
+
     private var footer: some View {
-        PrimaryButton(title: viewModel.isLastStep ? "GET STARTED"
-                                                   : (viewModel.isFirstStep ? "GET STARTED" : "CONTINUE")) {
+        PrimaryButton(title: footerTitle) {
             // Dismiss the keyboard before moving on.
             fieldFocused = false
             if viewModel.isLastStep {
-                viewModel.finish(into: environment)
+                Task { await viewModel.finish(into: environment) }
             } else {
                 viewModel.advance()
             }
         }
-        // Dim + disable until the current step is valid.
-        .opacity(viewModel.canAdvance ? 1 : 0.4)
-        .disabled(!viewModel.canAdvance)
+        // Dim + disable until the current step is valid (and while saving).
+        .opacity(viewModel.canAdvance && !viewModel.isSaving ? 1 : 0.4)
+        .disabled(!viewModel.canAdvance || viewModel.isSaving)
     }
 }
 
@@ -288,9 +302,6 @@ private struct OptionRow: View {
 
 #Preview {
     OnboardingView()
-        .environment(AppEnvironment(
-            hazardRepository: MockHazardRepository(),
-            rideRepository: MockRideRepository()
-        ))
+        .environment(AppEnvironment.preview)
         .preferredColorScheme(.dark)
 }

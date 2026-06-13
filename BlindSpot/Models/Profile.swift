@@ -10,7 +10,9 @@
 import Foundation
 
 struct Profile: Codable, Identifiable, Hashable {
-    let id: UUID
+    /// The Firebase UID — also the primary key of the Supabase `profiles` row.
+    /// Empty string until the user is signed in.
+    let id: String
     var displayName: String?
     var email: String?
     var phone: String?
@@ -22,7 +24,7 @@ struct Profile: Codable, Identifiable, Hashable {
     var emergencyContact: String?
 
     init(
-        id: UUID = UUID(),
+        id: String = "",
         displayName: String? = nil,
         email: String? = nil,
         phone: String? = nil,

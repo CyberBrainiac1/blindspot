@@ -51,9 +51,6 @@ struct RootTabView: View {
 
 #Preview {
     RootTabView()
-        .environment(AppEnvironment(
-            hazardRepository: MockHazardRepository(),
-            rideRepository: MockRideRepository()
-        ))
+        .environment(AppEnvironment.preview)
         .preferredColorScheme(.dark)
 }

@@ -2,15 +2,18 @@
 //  RecordRideViewModel.swift
 //  Blind Spot
 //
-//  Drives the Record screen. For the FOUNDATION milestone everything is
-//  SIMULATED — no CoreLocation/CoreMotion. A 1Hz timer increments elapsed time,
-//  distance, and speed with plausible values, and lays down fake `RidePoint`s so
-//  the saved ride has a real polyline for the recap.
+//  Drives the Record screen with REAL sensor data:
+//   - Speed + position come from CoreLocation (`LocationService`). Speed is the
+//     GPS Doppler speed (accurate), shown in mph.
+//   - Distance is accumulated from successive GPS fixes (CLLocation.distance).
+//   - The device IMU (`MotionService`, CoreMotion) is sampled continuously; large
+//     acceleration spikes log `impact` events and a very large spike auto-triggers
+//     the crash-SOS countdown. (A debug button also triggers it.)
 //
-//  The crash-SOS flow is a UI shell: a countdown that ends in a MOCK
-//  "SOS sent" confirmation. Nothing is actually sent.
+//  The crash-SOS flow itself is still a UI shell — it shows a mock "SOS sent"
+//  confirmation; nothing is actually transmitted yet.
 //
-//  Marked `@MainActor` because it mutates observable UI state from timers.
+//  `@MainActor` because it publishes UI state from timers + sensor callbacks.
 //
 
 import Foundation
@@ -21,104 +24,164 @@ import CoreLocation
 @Observable
 final class RecordRideViewModel {
 
-    /// Where we are in the record lifecycle.
     enum Phase {
-        case idle        // showing START RIDE
-        case recording   // active ride with live telemetry
+        case idle
+        case recording
     }
 
-    // MARK: - Live (simulated) telemetry
+    // MARK: - Live telemetry (real)
 
     private(set) var phase: Phase = .idle
     private(set) var elapsedSeconds: Int = 0
     private(set) var distanceMeters: Double = 0
-    private(set) var currentSpeed: Double = 0      // meters/second
+    private(set) var currentSpeedMPS: Double = 0
+    /// Peak IMU magnitude (g) seen this ride — surfaced as a telemetry stat.
+    private(set) var peakIMU: Double = 0
 
-    /// Events flagged during this ride (manual flags, simulated crash, etc.).
     private(set) var events: [RideEvent] = []
-
-    /// A short-lived confirmation string shown after a flag (e.g. "Pothole flagged").
     private(set) var flagConfirmation: String?
+    /// Set if saving the ride to the backend failed (so it's not silent).
+    private(set) var saveError: String?
 
     // MARK: - Crash SOS shell
 
     private(set) var sosActive = false
     private(set) var sosCountdown = 15
-    /// Set true when the countdown expires (shows the mock "SOS sent" screen).
     private(set) var sosSent = false
 
-    // MARK: - Private simulation state
+    // MARK: - Tuning
+
+    /// User-acceleration magnitude (g) that logs an `impact` event.
+    static let impactThreshold = 2.2
+    /// Magnitude (g) that auto-triggers the crash-SOS countdown.
+    static let crashThreshold = 3.5
+
+    // MARK: - Private
 
     private var rideStart: Date?
     private var points: [RidePoint] = []
+    private var lastFix: CLLocation?
     private var timer: Timer?
     private var sosTimer: Timer?
+    private var lastImpactAt: Date?
 
-    // Simulated current position; starts at San Jose and drifts each tick.
-    private var simLat = SampleData.sanJose.latitude
-    private var simLng = SampleData.sanJose.longitude
+    // Services are owned by AppEnvironment; held weakly for the active ride.
+    private weak var location: LocationService?
+    private weak var motion: MotionService?
+    // HazardRepository isn't class-constrained, so hold it strongly (no cycle —
+    // the repo doesn't reference the VM).
+    private var hazards: HazardRepository?
 
     // MARK: - Lifecycle
 
-    /// Begin a simulated ride.
-    func start() {
+    func start(location: LocationService, motion: MotionService, hazards: HazardRepository) {
         guard phase == .idle else { return }
+        self.location = location
+        self.motion = motion
+        self.hazards = hazards
+
         phase = .recording
         rideStart = Date()
         elapsedSeconds = 0
         distanceMeters = 0
-        currentSpeed = 0
+        currentSpeedMPS = 0
+        peakIMU = 0
         events = []
         points = []
-        simLat = SampleData.sanJose.latitude
-        simLng = SampleData.sanJose.longitude
+        lastFix = nil
+        saveError = nil
 
-        // 1Hz simulation tick.
+        location.startTracking()
+        motion.start { [weak self] magnitude in
+            Task { @MainActor in self?.handleMotion(magnitude) }
+        }
+
+        // 1 Hz sampler for elapsed time + telemetry from the latest GPS fix.
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            // Hop back to the main actor to mutate observable state.
             Task { @MainActor in self?.tick() }
         }
     }
 
-    /// One simulated second: advance time, distance, speed, and drop a point.
     private func tick() {
         elapsedSeconds += 1
+        currentSpeedMPS = location?.currentSpeedMPS ?? 0
 
-        // A wandering speed around ~6 m/s (~22 km/h) using a smooth sine, so the
-        // readout looks alive without real randomness.
-        let t = Double(elapsedSeconds)
-        currentSpeed = max(0, 6.0 + sin(t * 0.25) * 2.0)
-
-        // Distance covered this second = speed (m/s) * 1s.
-        distanceMeters += currentSpeed
-
-        // Drift the simulated coordinate roughly north-east by the distance moved.
-        let metersPerDegLat = 111_320.0
-        let metersPerDegLng = 111_320.0 * cos(simLat * .pi / 180)
-        simLat += (currentSpeed * 0.7) / metersPerDegLat
-        simLng += (currentSpeed * 0.7) / metersPerDegLng
-
-        points.append(RidePoint(
-            lat: simLat,
-            lng: simLng,
-            speed: currentSpeed,
-            recordedAt: Date()
-        ))
+        guard let fix = location?.currentLocation else { return }
+        if let last = lastFix {
+            let delta = fix.distance(from: last)
+            // Ignore GPS jitter (<2 m) and implausible jumps (>200 m in 1 s).
+            if delta >= 2 && delta < 200 {
+                distanceMeters += delta
+                appendPoint(fix)
+            }
+        } else {
+            appendPoint(fix)
+        }
     }
 
-    /// Flag a hazard at the current simulated location.
+    private func appendPoint(_ fix: CLLocation) {
+        points.append(RidePoint(
+            lat: fix.coordinate.latitude,
+            lng: fix.coordinate.longitude,
+            speed: max(0, fix.speed),
+            recordedAt: Date()
+        ))
+        lastFix = fix
+    }
+
+    // MARK: - IMU
+
+    private func handleMotion(_ magnitude: Double) {
+        peakIMU = max(peakIMU, magnitude)
+        guard magnitude >= Self.impactThreshold else { return }
+
+        // Debounce so one bump doesn't spam events.
+        let now = Date()
+        let cooled = lastImpactAt.map { now.timeIntervalSince($0) > 3 } ?? true
+        guard cooled else { return }
+        lastImpactAt = now
+
+        let coord = location?.currentLocation?.coordinate
+        events.append(RideEvent(
+            type: .impact,
+            lat: coord?.latitude ?? 0,
+            lng: coord?.longitude ?? 0,
+            imuMagnitude: magnitude,
+            occurredAt: now,
+            detected: true
+        ))
+
+        if magnitude >= Self.crashThreshold {
+            triggerCrashSOS(magnitude: magnitude, detected: true)
+        }
+    }
+
+    // MARK: - Flagging
+
     func flag(_ hazardType: HazardType) {
-        let event = RideEvent(
+        let coord = location?.currentLocation?.coordinate
+        let lat = coord?.latitude ?? 0
+        let lng = coord?.longitude ?? 0
+
+        events.append(RideEvent(
             type: .manualFlag,
             hazardType: hazardType,
-            lat: simLat,
-            lng: simLng,
+            lat: lat,
+            lng: lng,
+            imuMagnitude: peakIMU > 0 ? peakIMU : nil,
             occurredAt: Date(),
-            detected: false   // a manual flag is not ML-detected
-        )
-        events.append(event)
+            detected: false
+        ))
 
-        // Brief confirmation; clear after a moment.
+        // Also publish it to the crowd-sourced hazard map (fire-and-forget).
+        // Quick-flags default to moderate severity; a severity picker can come later.
+        if let hazards, coord != nil {
+            let hazard = Hazard(lat: lat, lng: lng, type: hazardType,
+                                severity: .moderate, status: .reported,
+                                firstReportedAt: Date())
+            Task { try? await hazards.reportHazard(hazard) }
+        }
+
         flagConfirmation = "\(hazardType.displayName) flagged"
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
@@ -126,11 +189,13 @@ final class RecordRideViewModel {
         }
     }
 
-    /// Stop the ride, build the summary, persist it, and return the new ride id
-    /// so the view can navigate to its recap. Resets back to idle.
+    // MARK: - Stop / save
+
     func stop(using repository: RideRepository) async -> UUID? {
         timer?.invalidate()
         timer = nil
+        location?.stopTracking()
+        motion?.stop()
 
         guard let start = rideStart else {
             phase = .idle
@@ -140,60 +205,69 @@ final class RecordRideViewModel {
         let duration = Double(elapsedSeconds)
         let avgSpeed = duration > 0 ? distanceMeters / duration : 0
 
+        // Simple mock safety score: fewer auto-detected events = higher score.
+        let detectedCount = events.filter { $0.type != .manualFlag }.count
         let ride = Ride(
             startedAt: start,
             endedAt: Date(),
             distanceMeters: distanceMeters,
             durationSeconds: duration,
             avgSpeed: avgSpeed,
-            // A simple mock safety score: fewer events = higher score.
-            safetyScore: max(40, 95 - events.count * 8),
+            safetyScore: max(40, 95 - detectedCount * 8),
             rating: nil
         )
 
-        // Snapshot detail before resetting.
         let savedPoints = points
         let savedEvents = events
-
-        try? await repository.saveRide(ride, points: savedPoints, events: savedEvents)
+        do {
+            try await repository.saveRide(ride, points: savedPoints, events: savedEvents)
+        } catch {
+            // Surface instead of silently dropping the ride.
+            saveError = "Couldn't save your ride. Check your connection and try again."
+            return nil
+        }
 
         reset()
         return ride.id
     }
 
-    /// Return to the idle (START RIDE) state.
     private func reset() {
         phase = .idle
         elapsedSeconds = 0
         distanceMeters = 0
-        currentSpeed = 0
+        currentSpeedMPS = 0
+        peakIMU = 0
         events = []
         points = []
         rideStart = nil
+        lastFix = nil
     }
 
-    // MARK: - Crash SOS (mock)
+    // MARK: - Crash SOS
 
-    /// Trigger the crash-SOS countdown overlay (debug button / future auto-detect).
+    /// Debug button entry point.
     func simulateCrash() {
+        triggerCrashSOS(magnitude: 6.4, detected: false)
+    }
+
+    private func triggerCrashSOS(magnitude: Double, detected: Bool) {
         guard !sosActive else { return }
 
-        // Record the crash as an event on the ride if one is in progress.
         if phase == .recording {
+            let coord = location?.currentLocation?.coordinate
             events.append(RideEvent(
                 type: .crash,
-                lat: simLat,
-                lng: simLng,
-                imuMagnitude: 6.4,
+                lat: coord?.latitude ?? 0,
+                lng: coord?.longitude ?? 0,
+                imuMagnitude: magnitude,
                 occurredAt: Date(),
-                detected: true   // pretend the (future) detector caught it
+                detected: detected
             ))
         }
 
         sosActive = true
         sosSent = false
         sosCountdown = 15
-
         sosTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.sosTick() }
         }
@@ -201,7 +275,6 @@ final class RecordRideViewModel {
 
     private func sosTick() {
         guard sosCountdown > 0 else {
-            // Countdown finished → mock "SOS sent".
             sosTimer?.invalidate()
             sosTimer = nil
             sosSent = true
@@ -210,7 +283,6 @@ final class RecordRideViewModel {
         sosCountdown -= 1
     }
 
-    /// Rider cancelled the SOS (the "I'm OK" / Dismiss action).
     func dismissSOS() {
         sosTimer?.invalidate()
         sosTimer = nil
