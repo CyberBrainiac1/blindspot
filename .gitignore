@@ -12,6 +12,7 @@ data/
 .env
 .env.local
 .env.*.local
+codex.md
 *.pem
 *.key
 *.p12
