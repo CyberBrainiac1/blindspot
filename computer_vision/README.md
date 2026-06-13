@@ -121,3 +121,11 @@ detections/              # auto-created when --save-frames
 - **GPIO output** — trigger an LED or buzzer on detection; easy to add in
   `main()` after the `result.has_detections` check.
 - **MQTT logging** — pipe detections to a broker for GPS-tagged mapping.
+
+
+NOTE:
+You will need the model in the `models/` folder, follow the specifications in main.py for how to obtain it. The model is PINTO Model Zoo Ultra Fast Lane Detection (TuSimple). Run with:
+
+```bash
+uv run main.py --model models/tusimple.onnx
+```
