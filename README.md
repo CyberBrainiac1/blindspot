@@ -4,7 +4,7 @@ Hackathon prototype for bike-mounted hazard capture and crowd safety mapping.
 
 This branch contains the algorithm/Raspberry Pi foundation:
 
-- Raspberry Pi capture loop scaffold with mock mode for laptop development.
+- Raspberry Pi capture loop scaffold with mock mode for development.
 - Local SQLite buffering for rides, GPS points, events, and photos.
 - IMU impact and crash detection logic.
 - Sync client stub for uploading buffered events/photos to a backend.
@@ -52,7 +52,7 @@ The code is designed to work without hardware while the rest of the product is s
 - `supabase` for uploading captured photos to Supabase Storage + the `photos` and `automated_photos` tables.
 - `requests` for the Pi-side Hack Club AI call after a ride.
 
-For v1, AI processing is intentionally post-ride on the Raspberry Pi instead of always-on real-time inference. Supabase is only storage for manual photos, automated photo metadata, ride rows, and `ai_summary`; it should not run the image-processing workflow.
+For v1, AI processing is intentionally post-ride instead of always-on real-time inference. The Pi remains the capture/controller and owns button handling, camera capture, BLE ride control, local buffering, and Supabase writes. Supabase is only storage for manual photos, automated photo metadata, ride rows, and `ai_summary`; it should not run the image-processing workflow.
 
 ## Button + 8-LED Strip Wiring
 
@@ -103,8 +103,7 @@ export BLINDSPOT_SUPABASE_AUTOMATED_PHOTOS_TABLE="automated_photos"
 export BLINDSPOT_USER_ID="..."
 export BLINDSPOT_BLE_ENABLED="1"
 export BLINDSPOT_BLE_NAME="BlindSpot-Pi"
-export HACKCLUB_AI_API_KEY="..."
-export BLINDSPOT_HACKCLUB_AI_MODEL="qwen/qwen3.7-plus"
+export BLINDSPOT_SUMMARY_SERVICE_URL="http://<summary-service-host>:8765"
 ```
 
 You can also put those values in `/home/pranav/blindspot/.env`; `.env` is ignored by Git.
@@ -115,7 +114,7 @@ Single-click captures a user/manual photo, uploads it to Storage, and inserts a 
 
 Only user/manual photos go into the `photos` table. Machine-triggered captures such as `impact`, `hard_brake`, `swerve`, `crash`, or Qwen interval frames upload under the same Storage bucket but insert rows into `automated_photos` instead. Automated rows also require a real `ride_id`, so every uploaded image remains tied to the active ride.
 
-When a ride stops, the Pi computes ride distance/duration/photo count from its local SQLite `ride_points` and `events`, sends the ride photos directly from the Pi to Hack Club AI Qwen when `HACKCLUB_AI_API_KEY` is set, and writes the summary back to Supabase. The summary is saved both on the separate `rides` table row for that ride and as a history row in `ai_summary`. The Qwen prompt specifically checks for green bike lanes/paths, bicycle pavement symbols, protected/painted/missing bike lanes, blocked lanes, potholes, cracks, debris, dangerous shoulders, and rough surface conditions. Set `BLINDSPOT_HACKCLUB_AI_MAX_IMAGES` to control how many ride images are attached; the default is `24`.
+When a ride stops, the Pi computes ride distance/duration/photo count from its local SQLite `ride_points` and `events`. If `BLINDSPOT_SUMMARY_SERVICE_URL` is set, the Pi requests a Qwen ride summary from that service, then writes the result back to Supabase. If the service URL is not set, the Pi runs Qwen directly when `HACKCLUB_AI_API_KEY` is present. The summary is saved both on the separate `rides` table row for that ride and as a history row in `ai_summary`. The Qwen prompt specifically checks for green bike lanes/paths, bicycle pavement symbols, protected/painted/missing bike lanes, blocked lanes, potholes, cracks, debris, dangerous shoulders, and rough surface conditions. Set `BLINDSPOT_HACKCLUB_AI_MAX_IMAGES` to control how many ride images are attached; the default is `24`.
 
 If the ride id comes from the iPhone or an already-open Supabase ride, the Pi mirrors that ride id into local SQLite so it can still do the photo summarization itself when the ride stops.
 
@@ -149,6 +148,23 @@ You can tune those values:
 ```bash
 python -m device.scripts.photo_button --double-window 0.55 --long-press 1.3
 ```
+
+### Ride summary service
+
+Start the optional ride summary service when you want the Pi to request structured Qwen ride summaries over the local network:
+
+```bash
+set HACKCLUB_AI_API_KEY=...
+python -m device.scripts.ride_summary_service --host 0.0.0.0 --port 8765
+```
+
+On the Pi, set:
+
+```bash
+export BLINDSPOT_SUMMARY_SERVICE_URL="http://<summary-service-host>:8765"
+```
+
+The Pi still captures photos, owns ride/photo bookkeeping, and uploads Supabase rows. The summary service receives ride metrics plus temporary base64 JPEGs and returns summary JSON to the Pi.
 
 ### Bluetooth ride-control
 

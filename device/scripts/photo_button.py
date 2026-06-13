@@ -18,6 +18,7 @@ from device.blindspot_device.gps import GpsFix
 from device.blindspot_device.led_strip import ConsoleLedStrip, NeoPixelStrip
 from device.blindspot_device.phone_bridge import PhoneRideClient
 from device.blindspot_device.ride_summary import QwenRideSummarizer
+from device.blindspot_device.summary_service import RideSummaryServiceClient
 from device.blindspot_device.store import LocalStore, RideMetrics
 from device.blindspot_device.supabase_sync import SupabasePhotoUploader
 
@@ -44,6 +45,7 @@ def main() -> None:
     timing = ButtonTiming(args.double_window, args.long_press)
     store = LocalStore(config.db_path)
     uploader = SupabasePhotoUploader.from_config(config)
+    summary_service = RideSummaryServiceClient.from_config(config)
     summarizer = QwenRideSummarizer.from_config(config)
     phone = PhoneRideClient.from_config(config)
     ble_enabled = (config.ble_enabled or args.ble) and not args.no_ble
@@ -126,13 +128,23 @@ def main() -> None:
             display_state()
 
     def summarize_ride(ride_id: str, metrics: RideMetrics) -> None:
-        if not summarizer.enabled:
+        photo_paths = store.ride_photo_paths(ride_id)
+        if summary_service.enabled:
+            try:
+                result = summary_service.summarize(metrics, photo_paths)
+                print("ride_summary_service=configured")
+            except Exception as exc:
+                print(f"ride_summary_service_error={exc}")
+                return
+        elif summarizer.enabled:
+            try:
+                result = summarizer.summarize(metrics, photo_paths)
+                print("ride_summary_service=direct")
+            except Exception as exc:
+                print(f"ride_summary_error={exc}")
+                return
+        else:
             print("ride_summary_skipped=no_hackclub_ai_key")
-            return
-        try:
-            result = summarizer.summarize(metrics, store.ride_photo_paths(ride_id))
-        except Exception as exc:
-            print(f"ride_summary_error={exc}")
             return
         if result is None:
             print("ride_summary_skipped=no_result")

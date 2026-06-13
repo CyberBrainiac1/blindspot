@@ -15,7 +15,7 @@ from device.blindspot_device.supabase_sync import SupabasePhotoUploader
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Blind Spot Raspberry Pi capture loop")
-    parser.add_argument("--mock", action="store_true", help="Use mock camera/GPS for laptop demos")
+    parser.add_argument("--mock", action="store_true", help="Use mock camera/GPS for development demos")
     parser.add_argument("--duration", type=float, default=10.0, help="Mock ride duration in seconds")
     args = parser.parse_args()
 

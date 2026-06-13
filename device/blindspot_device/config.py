@@ -116,6 +116,15 @@ class DeviceConfig:
     hackclub_ai_max_images: int = field(
         default_factory=lambda: int(os.getenv("BLINDSPOT_HACKCLUB_AI_MAX_IMAGES", "24"))
     )
+    summary_service_url: str | None = field(
+        default_factory=lambda: os.getenv("BLINDSPOT_SUMMARY_SERVICE_URL")
+    )
+    summary_service_token: str | None = field(
+        default_factory=lambda: os.getenv("BLINDSPOT_SUMMARY_SERVICE_TOKEN")
+    )
+    summary_service_timeout_s: float = field(
+        default_factory=lambda: float(os.getenv("BLINDSPOT_SUMMARY_SERVICE_TIMEOUT_S", "180.0"))
+    )
     phone_base_url: str | None = field(
         default_factory=lambda: _env_first("BLINDSPOT_PHONE_BASE_URL", "BLINDSPOT_IPHONE_BASE_URL")
     )
