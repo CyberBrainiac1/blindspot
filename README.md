@@ -101,14 +101,15 @@ export BLINDSPOT_SUPABASE_KEY="..."
 export BLINDSPOT_SUPABASE_BUCKET="photos"
 export BLINDSPOT_SUPABASE_AUTOMATED_PHOTOS_TABLE="automated_photos"
 export BLINDSPOT_USER_ID="..."
-export BLINDSPOT_PHONE_BASE_URL="http://172.20.10.1:8787"
+export BLINDSPOT_BLE_ENABLED="1"
+export BLINDSPOT_BLE_NAME="BlindSpot-Pi"
 export HACKCLUB_AI_API_KEY="..."
 export BLINDSPOT_HACKCLUB_AI_MODEL="qwen/qwen3.7-plus"
 ```
 
 You can also put those values in `/home/pranav/blindspot/.env`; `.env` is ignored by Git.
 
-Hold the button to start a ride. If `BLINDSPOT_PHONE_BASE_URL` is set, the Pi sends the ride start/stop commands to the iPhone app and treats the iPhone as the source of GPS route tracking. The iPhone app should create/close the Supabase ride and return the `ride_id`; the Pi uses that id only to attach captured photos.
+Hold the button to start a ride. If BLE is enabled, the Pi advertises a Blind Spot BLE service and the iPhone app connects to the Pi to receive ride start/stop commands. The iPhone app should create/close the Supabase ride and return the `ride_id`; the Pi uses that id only to attach captured photos. The Pi can stay connected to `MUSDChrome` Wi-Fi for internet/Supabase while Bluetooth is connected to the iPhone.
 
 Single-click captures a user/manual photo, uploads it to Storage, and inserts a row into `photos` with `ride_id` pointing at the active row in `rides`. The Pi refuses to upload a photo unless it has a real `ride_id`; no orphan `photos` rows should be created.
 
@@ -149,9 +150,59 @@ You can tune those values:
 python -m device.scripts.photo_button --double-window 0.55 --long-press 1.3
 ```
 
-### iPhone ride-control API
+### Bluetooth ride-control
 
-The iPhone app should listen on the hotspot LAN, for example `http://172.20.10.1:8787`, and implement:
+For Bluetooth mode, first prep the Pi adapter:
+
+```bash
+python -m device.scripts.bluetooth_ready --name BlindSpot-Pi --discoverable
+```
+
+Then start the button runner with BLE enabled:
+
+```bash
+python -m device.scripts.photo_button --ble
+```
+
+The Pi acts as the BLE peripheral / GATT server. The iPhone app acts as the BLE central and connects from inside the app. iOS Bluetooth Settings may show or pair the Pi for debugging, but the actual JSON ride commands are app-level BLE characteristic traffic.
+
+BLE UUIDs:
+
+| Purpose | UUID |
+|---|---|
+| Service | `9b7d0001-6c9e-4f2a-9f1a-4b5f0b5d0001` |
+| Pi command characteristic (`read` + `notify`) | `9b7d0002-6c9e-4f2a-9f1a-4b5f0b5d0002` |
+| iPhone response characteristic (`read` + `write`) | `9b7d0003-6c9e-4f2a-9f1a-4b5f0b5d0003` |
+
+On long press, the Pi notifies the command characteristic with:
+
+```json
+{
+  "type": "ride_start",
+  "request_id": "...",
+  "device_id": "pranav-pi-001",
+  "source": "raspberry_pi",
+  "occurred_at": "..."
+}
+```
+
+The iPhone writes this response JSON to the response characteristic:
+
+```json
+{
+  "ok": true,
+  "type": "ride_start_response",
+  "request_id": "...",
+  "ride_id": "...",
+  "status": "recording"
+}
+```
+
+On the next long press, the Pi sends `ride_stop` with the same shape plus `ride_id`, and expects `ride_stop_response`. Do not send GPS data over BLE; the Pi only needs the ride id and status.
+
+### Hotspot HTTP ride-control fallback
+
+If BLE is disabled and `BLINDSPOT_PHONE_BASE_URL` is set, the Pi can still use the older hotspot-LAN HTTP fallback. The iPhone app should listen on the hotspot LAN, for example `http://172.20.10.1:8787`, and implement:
 
 - `POST /blindspot/ride/start` with JSON `{ "type": "ride_start", "device_id": "...", "source": "raspberry_pi", "occurred_at": "..." }`
 - Response: `{ "ok": true, "ride_id": "...", "status": "recording" }`

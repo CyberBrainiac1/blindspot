@@ -12,6 +12,7 @@ pi = [
     "adafruit-circuitpython-neopixel>=6.3.15",
     "supabase>=2.15.0",
     "requests>=2.32.0",
+    "bless>=0.2.6",
 ]
 ml = ["ultralytics>=8.3.0"]
 dev = ["pytest>=8.0", "ruff>=0.11.0"]

@@ -30,6 +30,13 @@ def _env_first(*names: str) -> str | None:
     return None
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 _load_env_file()
 
 
@@ -115,6 +122,28 @@ class DeviceConfig:
     phone_token: str | None = field(default_factory=lambda: os.getenv("BLINDSPOT_PHONE_TOKEN"))
     phone_timeout_s: float = field(
         default_factory=lambda: float(os.getenv("BLINDSPOT_PHONE_TIMEOUT_S", "2.0"))
+    )
+    ble_enabled: bool = field(
+        default_factory=lambda: _env_bool("BLINDSPOT_BLE_ENABLED", False)
+    )
+    ble_name: str = field(default_factory=lambda: os.getenv("BLINDSPOT_BLE_NAME", "BlindSpot-Pi"))
+    ble_service_uuid: str = field(
+        default_factory=lambda: os.getenv(
+            "BLINDSPOT_BLE_SERVICE_UUID", "9b7d0001-6c9e-4f2a-9f1a-4b5f0b5d0001"
+        )
+    )
+    ble_command_uuid: str = field(
+        default_factory=lambda: os.getenv(
+            "BLINDSPOT_BLE_COMMAND_UUID", "9b7d0002-6c9e-4f2a-9f1a-4b5f0b5d0002"
+        )
+    )
+    ble_response_uuid: str = field(
+        default_factory=lambda: os.getenv(
+            "BLINDSPOT_BLE_RESPONSE_UUID", "9b7d0003-6c9e-4f2a-9f1a-4b5f0b5d0003"
+        )
+    )
+    ble_response_timeout_s: float = field(
+        default_factory=lambda: float(os.getenv("BLINDSPOT_BLE_RESPONSE_TIMEOUT_S", "10.0"))
     )
 
     def ensure_dirs(self) -> None:

@@ -11,6 +11,7 @@ from device.blindspot_device.button import (
     GpioButton,
     run_gesture_loop,
 )
+from device.blindspot_device.ble_bridge import BleRidePeripheral
 from device.blindspot_device.camera import MockCamera, PiCamera
 from device.blindspot_device.config import DeviceConfig
 from device.blindspot_device.gps import GpsFix
@@ -28,6 +29,8 @@ def main() -> None:
     parser.add_argument("--led-pin", default="D18", help="board pin name for NeoPixel data, e.g. D18")
     parser.add_argument("--led-count", type=int, default=8, help="number of addressable LEDs")
     parser.add_argument("--once", action="store_true", help="capture one photo and exit")
+    parser.add_argument("--ble", action="store_true", help="Enable BLE ride-control bridge")
+    parser.add_argument("--no-ble", action="store_true", help="Disable BLE even if env enables it")
     parser.add_argument("--double-window", type=float, default=0.45, help="seconds to wait for double click")
     parser.add_argument("--long-press", type=float, default=1.1, help="seconds held to count as long press")
     args = parser.parse_args()
@@ -43,6 +46,8 @@ def main() -> None:
     uploader = SupabasePhotoUploader.from_config(config)
     summarizer = QwenRideSummarizer.from_config(config)
     phone = PhoneRideClient.from_config(config)
+    ble_enabled = (config.ble_enabled or args.ble) and not args.no_ble
+    ble = BleRidePeripheral.from_config(config, enabled=ble_enabled)
 
     active_ride_id: str | None = None
     active_ride_source: str | None = None
@@ -152,6 +157,14 @@ def main() -> None:
             )
 
     def start_ride() -> tuple[str, str]:
+        if ble.enabled:
+            result = ble.start_ride()
+            if result is None or not result.ok or not result.ride_id:
+                raise RuntimeError("iPhone BLE ride start did not return ok=true with ride_id")
+            store.ensure_ride(result.ride_id, config.device_id)
+            print(f"gesture=long ble_start_sent={result.ride_id}")
+            return result.ride_id, "ble"
+
         if phone.enabled:
             result = phone.start_ride()
             if result is None or not result.ok or not result.ride_id:
@@ -172,6 +185,13 @@ def main() -> None:
         return ride_id, "local"
 
     def stop_ride(ride_id: str, source: str | None) -> None:
+        if source == "ble":
+            result = ble.stop_ride(ride_id)
+            if result is None or not result.ok:
+                raise RuntimeError("iPhone BLE ride stop did not return ok=true")
+            print(f"gesture=long ble_stop_sent={ride_id}")
+            summarize_local_ride(ride_id)
+            return
         if source == "iphone":
             result = phone.stop_ride(ride_id)
             if result is None or not result.ok:
@@ -217,6 +237,18 @@ def main() -> None:
             display_state()
 
     display_state()
+    if ble.enabled:
+        try:
+            ble.start()
+            print(
+                "ble_advertising="
+                f"name:{ble.name} service:{ble.service_uuid} "
+                f"command:{ble.command_uuid} response:{ble.response_uuid}"
+            )
+        except Exception as exc:
+            print(f"ble_start_error={exc}")
+            leds.error()
+            display_state()
     print("Waiting for button gesture. single=photo, double=video start/stop, long=ride start/stop.")
     try:
         if args.once:
@@ -238,6 +270,7 @@ def main() -> None:
         if camera.is_recording_video:
             video_path = camera.stop_video()
             print(f"video_stopped_on_exit={video_path}")
+        ble.close()
         leds.off()
         button.close()
         store.close()
