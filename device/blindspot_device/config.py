@@ -132,6 +132,9 @@ class DeviceConfig:
     phone_timeout_s: float = field(
         default_factory=lambda: float(os.getenv("BLINDSPOT_PHONE_TIMEOUT_S", "2.0"))
     )
+    led_enabled: bool = field(
+        default_factory=lambda: _env_bool("BLINDSPOT_LED_ENABLED", True)
+    )
     ble_enabled: bool = field(
         default_factory=lambda: _env_bool("BLINDSPOT_BLE_ENABLED", False)
     )

@@ -16,7 +16,7 @@ from device.blindspot_device.ble_bridge import BleRidePeripheral
 from device.blindspot_device.camera import MockCamera, PiCamera
 from device.blindspot_device.config import DeviceConfig
 from device.blindspot_device.gps import GpsFix
-from device.blindspot_device.led_strip import ConsoleLedStrip, NeoPixelStrip
+from device.blindspot_device.led_strip import ConsoleLedStrip, NeoPixelStrip, NullLedStrip
 from device.blindspot_device.phone_bridge import PhoneRideClient
 from device.blindspot_device.ride_summary import QwenRideSummarizer
 from device.blindspot_device.serial_bridge import SerialJsonBridge, serial_message_to_gesture
@@ -31,6 +31,7 @@ def main() -> None:
     parser.add_argument("--button-gpio", type=int, default=17, help="BCM GPIO pin for button input")
     parser.add_argument("--led-pin", default="D18", help="board pin name for NeoPixel data, e.g. D18")
     parser.add_argument("--led-count", type=int, default=8, help="number of addressable LEDs")
+    parser.add_argument("--no-led", action="store_true", help="Disable hardware LED strip output")
     parser.add_argument("--once", action="store_true", help="capture one photo and exit")
     parser.add_argument("--ble", action="store_true", help="Enable BLE ride-control bridge")
     parser.add_argument("--no-ble", action="store_true", help="Disable BLE even if env enables it")
@@ -52,7 +53,13 @@ def main() -> None:
 
     camera = MockCamera() if args.mock else PiCamera()
     button = ConsoleButton() if args.mock else GpioButton(args.button_gpio)
-    leds = ConsoleLedStrip() if args.mock else NeoPixelStrip(args.led_count, args.led_pin)
+    led_enabled = config.led_enabled and not args.no_led
+    if args.mock:
+        leds = ConsoleLedStrip()
+    elif led_enabled:
+        leds = NeoPixelStrip(args.led_count, args.led_pin)
+    else:
+        leds = NullLedStrip()
     timing = ButtonTiming(args.double_window, args.long_press)
     store = LocalStore(config.db_path)
     uploader = SupabasePhotoUploader.from_config(config)

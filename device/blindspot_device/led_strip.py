@@ -43,6 +43,26 @@ class ConsoleLedStrip(LedStrip):
         print("[led] off")
 
 
+class NullLedStrip(LedStrip):
+    def ready(self) -> None:
+        pass
+
+    def show_state(self, ride_active: bool = False, video_recording: bool = False) -> None:
+        pass
+
+    def capturing(self) -> None:
+        pass
+
+    def saved(self) -> None:
+        pass
+
+    def error(self) -> None:
+        pass
+
+    def off(self) -> None:
+        pass
+
+
 class NeoPixelStrip(LedStrip):
     def __init__(
         self,
