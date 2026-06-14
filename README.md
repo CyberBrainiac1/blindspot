@@ -42,6 +42,18 @@ Run image detection in deterministic mock mode:
 python -m ml.detect_hazards --model mock --images data/device/photos
 ```
 
+## Local Secrets
+
+Keep real secrets out of Git. Copy `.env.example` to `.env` for local runs, then fill in only the values needed for your machine. `.env` is ignored by Git.
+
+For GitHub Actions or deploy jobs, store values as GitHub repository secrets instead of committing them:
+
+```bash
+gh secret set HACKCLUB_AI_API_KEY --repo Ronyboxer/blindspot
+```
+
+The repo currently expects secret-like values such as `HACKCLUB_AI_API_KEY`, `BLINDSPOT_SUPABASE_KEY`, `BLINDSPOT_SUMMARY_SERVICE_TOKEN`, and `BLINDSPOT_PHONE_TOKEN` to be provided by environment variables, local `.env`, or GitHub Secrets.
+
 ## Raspberry Pi Notes
 
 The code is designed to work without hardware while the rest of the product is still being built. On the Pi, install the optional hardware packages and swap mock readers for real camera/GPS/GPIO readers:
