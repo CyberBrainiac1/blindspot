@@ -11,7 +11,7 @@ export default function DashboardLayout({
   children: ReactNode
 }) {
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider delay={0}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="min-w-0">
