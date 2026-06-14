@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Blind Spot iPhone Demo</title>
+    <meta name="description" content="Interactive GitHub Pages demo of the Blind Spot iPhone app.">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <svg class="icon-sprite" aria-hidden="true">
+      <symbol id="icon-map" viewBox="0 0 24 24">
+        <path d="M3.5 6.5 8.8 4l6.4 2.5 5.3-2.4v13.4L15.2 20l-6.4-2.5-5.3 2.4V6.5Z"></path>
+        <path d="M8.8 4v13.5M15.2 6.5V20"></path>
+      </symbol>
+      <symbol id="icon-record" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="8.5"></circle>
+        <circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"></circle>
+      </symbol>
+      <symbol id="icon-rides" viewBox="0 0 24 24">
+        <path d="M4 6h16M4 12h16M4 18h16"></path>
+        <path d="M7 4.5v3M7 10.5v3M7 16.5v3"></path>
+      </symbol>
+      <symbol id="icon-profile" viewBox="0 0 24 24">
+        <circle cx="12" cy="8" r="4"></circle>
+        <path d="M4.5 20c1.5-4 4-6 7.5-6s6 2 7.5 6"></path>
+      </symbol>
+      <symbol id="icon-back" viewBox="0 0 24 24">
+        <path d="m15 5-7 7 7 7"></path>
+      </symbol>
+      <symbol id="icon-flag" viewBox="0 0 24 24">
+        <path d="M6 21V4.5"></path>
+        <path d="M7 5h10l-2.2 3L17 11H7"></path>
+      </symbol>
+      <symbol id="icon-bike" viewBox="0 0 24 24">
+        <circle cx="6" cy="17" r="3.2"></circle>
+        <circle cx="18" cy="17" r="3.2"></circle>
+        <path d="M8 17h4l3-6h-3l-3 6M10 9h3M14 7h2"></path>
+      </symbol>
+      <symbol id="icon-warning" viewBox="0 0 24 24">
+        <path d="M12 3 22 20H2L12 3Z"></path>
+        <path d="M12 9v5M12 17.5v.1"></path>
+      </symbol>
+      <symbol id="icon-plus" viewBox="0 0 24 24">
+        <path d="M12 5v14M5 12h14"></path>
+      </symbol>
+      <symbol id="icon-bluetooth" viewBox="0 0 24 24">
+        <path d="M7 7l10 10-5 4V3l5 4L7 17"></path>
+      </symbol>
+      <symbol id="icon-trash" viewBox="0 0 24 24">
+        <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path>
+      </symbol>
+      <symbol id="icon-star" viewBox="0 0 24 24">
+        <path d="m12 3 2.7 5.6 6.2.9-4.5 4.4 1.1 6.1-5.5-2.9L6.5 20l1.1-6.1-4.5-4.4 6.2-.9L12 3Z"></path>
+      </symbol>
+      <symbol id="icon-camera" viewBox="0 0 24 24">
+        <path d="M5 8h3l1.5-2h5L16 8h3v11H5V8Z"></path>
+        <circle cx="12" cy="13.5" r="3.2"></circle>
+      </symbol>
+      <symbol id="icon-shield" viewBox="0 0 24 24">
+        <path d="M12 3 19 6v5c0 4.5-2.5 7.5-7 10-4.5-2.5-7-5.5-7-10V6l7-3Z"></path>
+      </symbol>
+      <symbol id="icon-chevron" viewBox="0 0 24 24">
+        <path d="m9 5 7 7-7 7"></path>
+      </symbol>
+    </svg>
+
+    <main class="stage">
+      <section class="phone-shell" aria-label="Blind Spot iPhone app demo">
+        <div class="side-button side-button-left"></div>
+        <div class="side-button side-button-right"></div>
+        <div class="screen">
+          <div class="dynamic-island"></div>
+          <div class="status-bar" aria-hidden="true">
+            <span>9:41</span>
+            <span class="status-icons">5G 100%</span>
+          </div>
+
+          <header class="app-header">
+            <button class="nav-icon is-hidden" id="backButton" type="button" aria-label="Back">
+              <svg><use href="#icon-back"></use></svg>
+            </button>
+            <h1 id="screenTitle">Hazard Map</h1>
+            <button class="nav-icon" id="headerAction" type="button" aria-label="Add hazard">
+              <svg><use href="#icon-plus"></use></svg>
+            </button>
+          </header>
+
+          <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+          <section class="screen-view active" data-screen="map">
+            <div class="fake-map" id="hazardMap" aria-label="San Jose hazard map">
+              <div class="map-water"></div>
+              <div class="road road-a"></div>
+              <div class="road road-b"></div>
+              <div class="road road-c"></div>
+              <div class="road road-d"></div>
+              <div class="bike-route"></div>
+              <div class="user-dot" aria-hidden="true"></div>
+              <div id="hazardPins"></div>
+              <button class="map-hint" id="addHazardButton" type="button">
+                <svg><use href="#icon-plus"></use></svg>
+                Tap the map to add a hazard
+              </button>
+            </div>
+
+            <div class="bottom-card map-list-card">
+              <div class="section-heading">
+                <span>LIVE HAZARDS</span>
+                <strong id="hazardCount">0</strong>
+              </div>
+              <div class="hazard-list" id="hazardList"></div>
+            </div>
+          </section>
+
+          <section class="screen-view" data-screen="record">
+            <div class="record-idle" id="recordIdle">
+              <button class="big-start" id="startRideButton" type="button">
+                <svg><use href="#icon-bike"></use></svg>
+                <span>START</span>
+              </button>
+              <p>Tap to start your ride</p>
+            </div>
+
+            <div class="recording hidden" id="recordingPanel">
+              <div class="card telemetry-card">
+                <div class="stat-grid">
+                  <div class="stat-tile">
+                    <strong id="speedStat">0.0</strong>
+                    <span>mph</span>
+                    <small>SPEED</small>
+                  </div>
+                  <div class="stat-tile">
+                    <strong id="timeStat">00:00</strong>
+                    <small>TIME</small>
+                  </div>
+                  <div class="stat-tile">
+                    <strong id="distanceStat">0.00</strong>
+                    <span>mi</span>
+                    <small>DISTANCE</small>
+                  </div>
+                  <div class="stat-tile">
+                    <strong id="peakGStat">1.0</strong>
+                    <span>g</span>
+                    <small>PEAK G</small>
+                  </div>
+                </div>
+              </div>
+
+              <div class="record-center">
+                <button class="flag-button" id="flagButton" type="button">
+                  <svg><use href="#icon-flag"></use></svg>
+                  <span>FLAG HAZARD</span>
+                </button>
+                <div class="flag-note" id="flagNote">Saved</div>
+              </div>
+
+              <div class="record-actions">
+                <button class="stop-button" id="stopRideButton" type="button">STOP</button>
+                <button class="ghost-button" id="simulateCrashButton" type="button">
+                  <svg><use href="#icon-warning"></use></svg>
+                  Simulate crash
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="screen-view" data-screen="rides">
+            <div class="ride-list" id="rideList"></div>
+          </section>
+
+          <section class="screen-view" data-screen="profile">
+            <div class="scroll-stack">
+              <div class="card profile-card">
+                <label>
+                  <span>DISPLAY NAME</span>
+                  <input value="Ronak Rupani" aria-label="Display name">
+                </label>
+                <label>
+                  <span>EMAIL</span>
+                  <input value="ronak@example.com" aria-label="Email">
+                </label>
+                <label>
+                  <span>PHONE</span>
+                  <input value="(555) 123-4567" aria-label="Phone">
+                </label>
+              </div>
+
+              <div class="card">
+                <button class="profile-row" id="pairingCard" type="button">
+                  <span class="row-icon">
+                    <svg><use href="#icon-bluetooth"></use></svg>
+                  </span>
+                  <span>
+                    <strong>Pi Pairing (Bluetooth)</strong>
+                    <small id="pairingSummary">Advertising</small>
+                  </span>
+                  <svg class="chevron"><use href="#icon-chevron"></use></svg>
+                </button>
+              </div>
+
+              <div class="card">
+                <div class="section-heading">
+                  <span>EMERGENCY CONTACT</span>
+                </div>
+                <button class="primary-button" id="chooseContactButton" type="button">Choose from Contacts</button>
+                <label class="manual-contact">
+                  <span>OR ENTER MANUALLY</span>
+                  <input value="Alex - (555) 910-2211" aria-label="Emergency contact">
+                </label>
+                <p class="muted">Texted automatically if the crash-SOS countdown is not dismissed.</p>
+              </div>
+
+              <div class="card">
+                <div class="section-heading">
+                  <span>RIDING</span>
+                </div>
+                <div class="split-row">
+                  <span>Skill level</span>
+                  <strong>Advanced</strong>
+                </div>
+                <div class="split-row">
+                  <span>Rides per week</span>
+                  <strong>3-4 / week</strong>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="screen-view detail-view" data-screen="recap">
+            <div class="scroll-stack" id="recapContent"></div>
+          </section>
+
+          <section class="screen-view detail-view" data-screen="pairing">
+            <div class="scroll-stack">
+              <div class="card">
+                <label class="toggle-row">
+                  <span>
+                    <strong>Bluetooth Pairing</strong>
+                    <small>Keep the app open while pairing with the Pi.</small>
+                  </span>
+                  <input id="pairingToggle" type="checkbox" checked>
+                </label>
+              </div>
+
+              <div class="card">
+                <div class="section-heading">
+                  <span>STATUS</span>
+                </div>
+                <div class="status-row"><span>Bluetooth</span><strong class="ok">On</strong></div>
+                <div class="status-row"><span>Advertising</span><strong class="ok" id="advertisingStatus">Yes</strong></div>
+                <div class="status-row"><span>Pi connected</span><strong class="ok" id="piStatus">BlindSpot-Pi</strong></div>
+                <div class="status-row"><span>Active ride</span><strong id="activeRideStatus">-</strong></div>
+                <div class="status-row"><span>Last command</span><strong id="lastCommandStatus">ride_start</strong></div>
+                <div class="status-row"><span>Last response</span><strong id="lastResponseStatus">ready</strong></div>
+              </div>
+
+              <div class="card">
+                <div class="section-heading">
+                  <span>LOG</span>
+                </div>
+                <div class="ble-log" id="bleLog"></div>
+                <button class="primary-button" id="simulatePiCommand" type="button">Simulate Pi command</button>
+              </div>
+            </div>
+          </section>
+
+          <nav class="tab-bar" aria-label="Main app tabs">
+            <button class="tab active" data-tab="map" type="button">
+              <svg><use href="#icon-map"></use></svg>
+              <span>Map</span>
+            </button>
+            <button class="tab" data-tab="record" type="button">
+              <svg><use href="#icon-record"></use></svg>
+              <span>Record</span>
+            </button>
+            <button class="tab" data-tab="rides" type="button">
+              <svg><use href="#icon-rides"></use></svg>
+              <span>Rides</span>
+            </button>
+            <button class="tab" data-tab="profile" type="button">
+              <svg><use href="#icon-profile"></use></svg>
+              <span>Profile</span>
+            </button>
+          </nav>
+
+          <div class="sos-overlay hidden" id="sosOverlay" aria-live="assertive">
+            <svg><use href="#icon-warning"></use></svg>
+            <h2 id="sosTitle">CRASH DETECTED</h2>
+            <p id="sosCopy">Sending SOS in</p>
+            <strong id="sosCountdown">8</strong>
+            <p class="muted" id="sosContact">Will alert: Alex - (555) 910-2211</p>
+            <button class="primary-button" id="cancelSosButton" type="button">I'M OK - CANCEL</button>
+          </div>
+
+          <div class="action-sheet hidden" id="actionSheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+            <div class="sheet-panel">
+              <h2 id="sheetTitle">Choose</h2>
+              <div id="sheetActions"></div>
+              <button class="sheet-cancel" id="sheetCancel" type="button">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
