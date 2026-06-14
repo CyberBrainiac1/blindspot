@@ -42,6 +42,7 @@ codex.md
 *.p12
 *.mobileprovision
 secrets.*
+docs/iphone-demo/config.local.js
 
 # XcodeGen generated files
 BlindSpot.xcodeproj/
