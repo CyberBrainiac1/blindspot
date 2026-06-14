@@ -59,4 +59,23 @@ final class MockRideRepository: RideRepository {
     func deleteRide(id: UUID) async throws {
         bundles.removeAll { $0.ride.id == id }
     }
+
+    func fetchAISummary(rideId: UUID) async throws -> RideAISummary? {
+        // Sample so previews show the AI card.
+        RideAISummary(
+            id: UUID(), rideId: rideId,
+            summary: "Smooth ride on mostly well-maintained roads. A short stretch had cracked pavement near the midpoint.",
+            accessibilityScore: 78, accessibilityRating: "good",
+            potholesDetected: true, potholeCount: 2,
+            labels: ["bike_lane", "urban"],
+            observations: ["Clear bike lane for most of the route", "Cracked pavement near midpoint"],
+            roadHazards: ["cracked_pavement"],
+            recommendedMapTags: ["bike_lane"]
+        )
+    }
+
+    func fetchPhotos(rideId: UUID) async throws -> [RidePhoto] {
+        // No remote images in previews.
+        []
+    }
 }

@@ -27,4 +27,10 @@ protocol RideRepository {
 
     /// Permanently delete a ride (and its points/events).
     func deleteRide(id: UUID) async throws
+
+    /// The Pi's AI analysis for a ride (from `ai_summary`), or nil if none yet.
+    func fetchAISummary(rideId: UUID) async throws -> RideAISummary?
+
+    /// Photos captured during a ride (manual `photos` + machine `automated_photos`).
+    func fetchPhotos(rideId: UUID) async throws -> [RidePhoto]
 }

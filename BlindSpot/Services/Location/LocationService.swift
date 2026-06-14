@@ -24,7 +24,11 @@ protocol LocationService: AnyObject {
     var isTracking: Bool { get }
 
     func requestAuthorization()
-    /// Begin high-accuracy updates suitable for an active ride.
+    /// Begin lightweight foreground updates (e.g. while viewing the map) so the
+    /// user's location is available without a ride being active.
+    func startUpdates()
+    func stopUpdates()
+    /// Begin high-accuracy updates suitable for an active ride (background-enabled).
     func startTracking()
     func stopTracking()
 }

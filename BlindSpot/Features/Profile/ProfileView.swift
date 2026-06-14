@@ -24,6 +24,7 @@ struct ProfileView: View {
                         identityCard
                         ridingCard
                         emergencyCard
+                        piPairingCard
                         accountCard
                     }
                     .padding(16)
@@ -39,6 +40,36 @@ struct ProfileView: View {
                 }
             }
         }
+    }
+
+    // MARK: Pi pairing (Bluetooth)
+
+    private var piPairingCard: some View {
+        NavigationLink {
+            PiPairingView()
+        } label: {
+            BSCard {
+                HStack(spacing: 12) {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(Color.bsPrimary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Pi Pairing (Bluetooth)")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.bsWhite)
+                        Text(environment.ridePeripheralServer.status.isAdvertising
+                             ? "Advertising" : "Off")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.bsWhite.opacity(0.5))
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Color.bsWhite.opacity(0.4))
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Identity (name / email / phone)

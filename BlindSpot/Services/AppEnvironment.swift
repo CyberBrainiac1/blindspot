@@ -31,6 +31,14 @@ final class AppEnvironment {
     let locationService: LocationService
     let motionService: MotionService
 
+    /// Shared ride lifecycle, driven by both the UI and the Raspberry Pi.
+    let rideController: RideController
+    /// Local HTTP server the Pi calls to start/stop a ride (port 8787).
+    /// Legacy hotspot path — kept but not auto-started; BLE is the current path.
+    let rideControlServer: RideControlServer
+    /// BLE peripheral the Pi connects to over Bluetooth (current Pi integration).
+    let ridePeripheralServer: RidePeripheralServer
+
     // MARK: Session state
 
     /// The signed-in rider's profile, loaded from Supabase. Nil when signed out
@@ -52,6 +60,24 @@ final class AppEnvironment {
         self.authService = authService
         self.locationService = locationService
         self.motionService = motionService
+
+        // One ride controller shared by the UI and the Pi HTTP server.
+        let controller = RideController(
+            rideRepository: rideRepository,
+            hazardRepository: hazardRepository,
+            locationService: locationService,
+            motionService: motionService
+        )
+        self.rideController = controller
+        let server = RideControlServer()
+        server.delegate = controller
+        self.rideControlServer = server
+
+        // BLE peripheral (current Pi integration) — same delegate, so BLE drives
+        // the same ride lifecycle.
+        let ble = RidePeripheralServer()
+        ble.delegate = controller
+        self.ridePeripheralServer = ble
     }
 
     // MARK: Session helpers

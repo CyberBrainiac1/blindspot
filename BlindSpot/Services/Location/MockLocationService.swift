@@ -23,6 +23,8 @@ final class MockLocationService: LocationService {
     }
 
     func requestAuthorization() {}
+    func startUpdates() {}
+    func stopUpdates() {}
     func startTracking() { isTracking = true }
     func stopTracking() { isTracking = false }
 }

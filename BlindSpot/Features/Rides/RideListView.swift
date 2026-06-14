@@ -56,10 +56,16 @@ struct RideListView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
+                    .background(Color.bsBlack)
+                    // Remove the List's default top inset.
+                    .contentMargins(.top, 0, for: .scrollContent)
+                    .environment(\.defaultMinListRowHeight, 0)
                 }
             }
             .navigationTitle("Rides")
-            .toolbarBackground(Color.bsCharcoal, for: .navigationBar)
+            // Inline (not the tall large-title bar) — that big bar was the gray space.
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.bsBlack, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             // Confirm before deleting.
             .confirmationDialog(

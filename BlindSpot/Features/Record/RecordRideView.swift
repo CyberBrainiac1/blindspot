@@ -16,17 +16,21 @@ import SwiftUI
 struct RecordRideView: View {
 
     @Environment(AppEnvironment.self) private var environment
-    @State private var viewModel = RecordRideViewModel()
 
     // Navigation path for pushing the recap after a ride is saved.
     @State private var path: [UUID] = []
+    // Shows the hazard-type chooser when flagging.
+    @State private var showFlagPicker = false
+
+    // The shared ride lifecycle (also driven by the Raspberry Pi via HTTP).
+    private var controller: RideController { environment.rideController }
 
     var body: some View {
         NavigationStack(path: $path) {
             ZStack {
                 Color.bsBlack.ignoresSafeArea()
 
-                switch viewModel.phase {
+                switch controller.phase {
                 case .idle:      idleState
                 case .recording: recordingState
                 }
@@ -36,24 +40,28 @@ struct RecordRideView: View {
             .toolbarBackground(Color.bsCharcoal, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .navigationDestination(for: UUID.self) { rideId in
-                RideRecapView(rideId: rideId)
+                // Reached right after a ride → offer the pothole-report email.
+                RideRecapView(rideId: rideId, autoPromptEmail: true)
             }
             // Crash-SOS overlay floats above the whole screen when active.
             .overlay {
-                if viewModel.sosActive {
+                if controller.sosActive {
                     CrashSOSOverlay(
-                        countdown: viewModel.sosCountdown,
-                        sent: viewModel.sosSent,
+                        countdown: controller.sosCountdown,
+                        sent: controller.sosSent,
                         emergencyContact: environment.profile?.emergencyContact,
-                        onDismiss: { viewModel.dismissSOS() }
+                        onDismiss: { controller.dismissSOS() }
                     )
                 }
             }
             // Haptic each time an event is flagged (count goes up). iOS 17 API.
-            .sensoryFeedback(.success, trigger: viewModel.events.count)
-            .animation(.easeInOut, value: viewModel.sosActive)
+            .sensoryFeedback(.success, trigger: controller.events.count)
+            .animation(.easeInOut, value: controller.sosActive)
             // Ask for location up front so the first ride has GPS immediately.
-            .task { environment.locationService.requestAuthorization() }
+            // (Pi ride control is now over BLE — see Profile → Pi Pairing.)
+            .task {
+                environment.locationService.requestAuthorization()
+            }
         }
     }
 
@@ -65,11 +73,7 @@ struct RecordRideView: View {
 
             // The big, central, tap-to-start control.
             BigStartButton {
-                viewModel.start(
-                    location: environment.locationService,
-                    motion: environment.motionService,
-                    hazards: environment.hazardRepository
-                )
+                Task { await controller.start() }
             }
 
             Text("Tap to start your ride")
@@ -97,16 +101,16 @@ struct RecordRideView: View {
             BSCard {
                 VStack(spacing: 20) {
                     HStack(spacing: 12) {
-                        StatTile(value: Format.mph(viewModel.currentSpeedMPS),
+                        StatTile(value: Format.mph(controller.currentSpeedMPS),
                                  label: "Speed", unit: "mph")
-                        StatTile(value: Format.duration(Double(viewModel.elapsedSeconds)),
+                        StatTile(value: Format.duration(Double(controller.elapsedSeconds)),
                                  label: "Time")
                     }
                     HStack(spacing: 12) {
-                        StatTile(value: Format.miles(viewModel.distanceMeters),
+                        StatTile(value: Format.miles(controller.distanceMeters),
                                  label: "Distance", unit: "mi")
                         // Peak IMU magnitude this ride — proves the accelerometer is live.
-                        StatTile(value: String(format: "%.1f", viewModel.peakIMU),
+                        StatTile(value: String(format: "%.1f", controller.peakIMU),
                                  label: "Peak G", unit: "g")
                     }
                 }
@@ -119,10 +123,10 @@ struct RecordRideView: View {
             // The big hi-vis flag button + transient confirmation.
             ZStack {
                 FlagButton {
-                    // Default flag type for the quick-tap; a type picker can come later.
-                    viewModel.flag(.pothole)
+                    // Choose the hazard type (glass, construction, pothole, …).
+                    showFlagPicker = true
                 }
-                if let confirmation = viewModel.flagConfirmation {
+                if let confirmation = controller.flagConfirmation {
                     Text(confirmation)
                         .font(.bsCaption)
                         .foregroundStyle(Color.bsBlack)
@@ -134,12 +138,18 @@ struct RecordRideView: View {
                         .transition(.opacity)
                 }
             }
-            .animation(.easeInOut, value: viewModel.flagConfirmation)
+            .animation(.easeInOut, value: controller.flagConfirmation)
+            .confirmationDialog("Flag a hazard", isPresented: $showFlagPicker, titleVisibility: .visible) {
+                ForEach(HazardType.allCases) { type in
+                    Button(type.displayName) { controller.flag(type) }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
 
             Spacer()
 
             // Surface a save failure instead of dropping the ride silently.
-            if let saveError = viewModel.saveError {
+            if let saveError = controller.saveError {
                 Text(saveError)
                     .font(.bsCaption)
                     .foregroundStyle(Color.bsSevere)
@@ -151,7 +161,7 @@ struct RecordRideView: View {
             VStack(spacing: 12) {
                 Button {
                     Task {
-                        if let rideId = await viewModel.stop(using: environment.rideRepository) {
+                        if let rideId = await controller.stop() {
                             path.append(rideId)   // navigate to recap
                         }
                     }
@@ -170,7 +180,7 @@ struct RecordRideView: View {
 
                 // Debug-only affordance to exercise the crash-SOS flow.
                 Button {
-                    viewModel.simulateCrash()
+                    controller.simulateCrash()
                 } label: {
                     Label("Simulate crash", systemImage: "exclamationmark.triangle.fill")
                         .font(.system(size: 13, weight: .semibold))

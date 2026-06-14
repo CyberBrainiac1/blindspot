@@ -36,18 +36,46 @@ final class LiveLocationService: NSObject, LocationService, CLLocationManagerDel
         manager.requestWhenInUseAuthorization()
     }
 
+    // Foreground "standby" updates (map viewing / hazard reporting), separate from
+    // ride tracking so stopping one doesn't kill the other.
+    @ObservationIgnored private var standbyActive = false
+
+    func startUpdates() {
+        if authorizationStatus == .notDetermined {
+            manager.requestWhenInUseAuthorization()
+        }
+        standbyActive = true
+        manager.startUpdatingLocation()
+    }
+
+    func stopUpdates() {
+        standbyActive = false
+        // Don't stop the GPS if a ride is still recording.
+        if !isTracking {
+            manager.stopUpdatingLocation()
+        }
+    }
+
     func startTracking() {
         // Make sure we're authorized; request if needed.
         if authorizationStatus == .notDetermined {
             manager.requestWhenInUseAuthorization()
         }
         isTracking = true
+        // Keep tracking when backgrounded mid-ride (requires UIBackgroundModes
+        // "location" in Info.plist). Shows the blue status bar.
+        manager.allowsBackgroundLocationUpdates = true
+        manager.pausesLocationUpdatesAutomatically = false
         manager.startUpdatingLocation()
     }
 
     func stopTracking() {
         isTracking = false
-        manager.stopUpdatingLocation()
+        manager.allowsBackgroundLocationUpdates = false
+        // Keep updating if the map is still in standby; otherwise stop.
+        if !standbyActive {
+            manager.stopUpdatingLocation()
+        }
         currentSpeedMPS = 0
     }
 
