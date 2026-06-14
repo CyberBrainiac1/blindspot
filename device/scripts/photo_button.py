@@ -12,7 +12,7 @@ from device.blindspot_device.button import (
     GpioButton,
     run_gesture_loop,
 )
-from device.blindspot_device.ble_bridge import BleRidePeripheral
+from device.blindspot_device.ble_bridge import BlePhonePeripheralClient, BleRidePeripheral
 from device.blindspot_device.camera import LazyPiCamera, MockCamera
 from device.blindspot_device.config import DeviceConfig
 from device.blindspot_device.gps import GpsFix
@@ -67,7 +67,10 @@ def main() -> None:
     summarizer = QwenRideSummarizer.from_config(config)
     phone = PhoneRideClient.from_config(config)
     ble_enabled = (config.ble_enabled or args.ble) and not args.no_ble
-    ble = BleRidePeripheral.from_config(config, enabled=ble_enabled)
+    if config.ble_mode.strip().lower() in {"central", "client", "phone"}:
+        ble = BlePhonePeripheralClient.from_config(config, enabled=ble_enabled)
+    else:
+        ble = BleRidePeripheral.from_config(config, enabled=ble_enabled)
     serial_enabled = (config.serial_enabled or args.serial) and not args.no_serial
     serial_bridge = SerialJsonBridge.from_config(
         config,
@@ -344,17 +347,10 @@ def main() -> None:
     if ble.enabled:
         try:
             ble.start()
-            print(
-                "ble_advertising="
-                f"name:{ble.name} service:{ble.service_uuid} "
-                f"command:{ble.command_uuid} response:{ble.response_uuid}"
-            )
+            print(f"ble_ready=mode:{config.ble_mode}")
             emit(
-                "ble_advertising",
-                name=ble.name,
-                service_uuid=ble.service_uuid,
-                command_uuid=ble.command_uuid,
-                response_uuid=ble.response_uuid,
+                "ble_ready",
+                mode=config.ble_mode,
             )
         except Exception as exc:
             print(f"ble_start_error={exc}")

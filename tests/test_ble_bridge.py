@@ -4,6 +4,7 @@ import json
 import unittest
 
 from device.blindspot_device.ble_bridge import (
+    BlePhonePeripheralClient,
     BleRidePeripheral,
     build_ble_ride_command,
     decode_ble_json,
@@ -14,6 +15,13 @@ from device.blindspot_device.ble_bridge import (
 class BleBridgeTests(unittest.TestCase):
     def test_disabled_bridge_does_not_start_or_signal(self) -> None:
         bridge = BleRidePeripheral(enabled=False, name="BlindSpot-Test", device_id="pi-test")
+
+        self.assertFalse(bridge.enabled)
+        self.assertIsNone(bridge.start_ride())
+        self.assertIsNone(bridge.stop_ride("ride-1"))
+
+    def test_disabled_phone_client_does_not_signal(self) -> None:
+        bridge = BlePhonePeripheralClient(enabled=False, device_id="pi-test")
 
         self.assertFalse(bridge.enabled)
         self.assertIsNone(bridge.start_ride())

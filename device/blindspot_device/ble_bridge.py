@@ -15,6 +15,9 @@ from .phone_bridge import PhoneRideResult
 DEFAULT_BLE_SERVICE_UUID = "9b7d0001-6c9e-4f2a-9f1a-4b5f0b5d0001"
 DEFAULT_BLE_COMMAND_UUID = "9b7d0002-6c9e-4f2a-9f1a-4b5f0b5d0002"
 DEFAULT_BLE_RESPONSE_UUID = "9b7d0003-6c9e-4f2a-9f1a-4b5f0b5d0003"
+DEFAULT_PHONE_SERVICE_UUID = "9b7d0001-6c9e-4f2a-9f1a-9b11d5070001"
+DEFAULT_PHONE_WRITE_UUID = "9b7d0002-6c9e-4f2a-9f1a-9b11d5070001"
+DEFAULT_PHONE_NOTIFY_UUID = "9b7d0003-6c9e-4f2a-9f1a-9b11d5070001"
 
 
 def _utc_now() -> str:
@@ -250,6 +253,136 @@ class BleRidePeripheral:
                 return
             pending.response = response
             pending.event.set()
+
+
+class BlePhonePeripheralClient:
+    """BLE central/client for the iPhone app when the app advertises a GATT service."""
+
+    def __init__(
+        self,
+        enabled: bool,
+        device_id: str,
+        phone_name: str = "Blind Spot",
+        service_uuid: str = DEFAULT_PHONE_SERVICE_UUID,
+        write_uuid: str = DEFAULT_PHONE_WRITE_UUID,
+        notify_uuid: str = DEFAULT_PHONE_NOTIFY_UUID,
+        response_timeout_s: float = 10.0,
+        scan_timeout_s: float = 8.0,
+    ) -> None:
+        self._enabled = enabled
+        self.device_id = device_id
+        self.phone_name = phone_name
+        self.service_uuid = service_uuid.lower()
+        self.write_uuid = write_uuid.lower()
+        self.notify_uuid = notify_uuid.lower()
+        self.response_timeout_s = response_timeout_s
+        self.scan_timeout_s = scan_timeout_s
+
+    @classmethod
+    def from_config(
+        cls, config: DeviceConfig, enabled: bool | None = None
+    ) -> BlePhonePeripheralClient:
+        return cls(
+            enabled=config.ble_enabled if enabled is None else enabled,
+            device_id=config.device_id,
+            phone_name=config.ble_phone_name,
+            service_uuid=config.ble_phone_service_uuid,
+            write_uuid=config.ble_phone_write_uuid,
+            notify_uuid=config.ble_phone_notify_uuid,
+            response_timeout_s=config.ble_response_timeout_s,
+            scan_timeout_s=config.ble_scan_timeout_s,
+        )
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    @property
+    def started(self) -> bool:
+        return self.enabled
+
+    def start(self) -> None:
+        return
+
+    def close(self) -> None:
+        return
+
+    def start_ride(self) -> PhoneRideResult | None:
+        if not self.enabled:
+            return None
+        payload = build_ble_ride_command("ride_start", self.device_id)
+        return self._request_ride_action(payload)
+
+    def stop_ride(self, ride_id: str | None) -> PhoneRideResult | None:
+        if not self.enabled:
+            return None
+        payload = build_ble_ride_command("ride_stop", self.device_id, ride_id=ride_id)
+        return self._request_ride_action(payload)
+
+    def _request_ride_action(self, payload: dict[str, Any]) -> PhoneRideResult:
+        return asyncio.run(self._request_ride_action_async(payload))
+
+    async def _request_ride_action_async(self, payload: dict[str, Any]) -> PhoneRideResult:
+        try:
+            from bleak import BleakClient, BleakScanner  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "Install the BLE client dependency on the Pi with: python -m pip install '.[pi]'"
+            ) from exc
+
+        request_id = str(payload["request_id"])
+        response_event = asyncio.Event()
+        response_payload: dict[str, Any] | None = None
+
+        def is_phone(device: Any, advertisement: Any) -> bool:
+            name = device.name or getattr(advertisement, "local_name", None) or ""
+            uuids = [uuid.lower() for uuid in (getattr(advertisement, "service_uuids", None) or [])]
+            return name == self.phone_name or self.service_uuid in uuids
+
+        device = await BleakScanner.find_device_by_filter(is_phone, timeout=self.scan_timeout_s)
+        if device is None:
+            raise RuntimeError(
+                f"Timed out scanning for iPhone BLE service {self.service_uuid}. "
+                "Open the Blind Spot app and start its Bluetooth signal."
+            )
+
+        def on_notify(_: int, data: bytearray) -> None:
+            nonlocal response_payload
+            parsed = decode_ble_json(bytes(data))
+            if parsed.get("request_id") in {None, request_id}:
+                response_payload = parsed
+                response_event.set()
+
+        async with BleakClient(device, timeout=self.response_timeout_s) as client:
+            await client.start_notify(self.notify_uuid, on_notify)
+            try:
+                await client.write_gatt_char(
+                    self.write_uuid,
+                    bytes(encode_ble_json(payload)),
+                    response=True,
+                )
+                try:
+                    await asyncio.wait_for(response_event.wait(), timeout=self.response_timeout_s)
+                except TimeoutError as exc:
+                    raise RuntimeError(
+                        "Timed out waiting for iPhone BLE notify response with ride_id."
+                    ) from exc
+            finally:
+                try:
+                    await client.stop_notify(self.notify_uuid)
+                except Exception:
+                    pass
+
+        response = response_payload or {}
+        ok = bool(response.get("ok", True))
+        ride_id = response.get("ride_id")
+        status = response.get("status")
+        return PhoneRideResult(
+            ok=ok,
+            ride_id=str(ride_id) if ride_id else None,
+            status=str(status) if status else None,
+            raw=response,
+        )
 
 
 def build_ble_ride_command(

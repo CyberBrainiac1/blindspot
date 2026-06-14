@@ -138,6 +138,7 @@ class DeviceConfig:
     ble_enabled: bool = field(
         default_factory=lambda: _env_bool("BLINDSPOT_BLE_ENABLED", False)
     )
+    ble_mode: str = field(default_factory=lambda: os.getenv("BLINDSPOT_BLE_MODE", "peripheral"))
     ble_name: str = field(default_factory=lambda: os.getenv("BLINDSPOT_BLE_NAME", "BlindSpot-Pi"))
     ble_service_uuid: str = field(
         default_factory=lambda: os.getenv(
@@ -156,6 +157,27 @@ class DeviceConfig:
     )
     ble_response_timeout_s: float = field(
         default_factory=lambda: float(os.getenv("BLINDSPOT_BLE_RESPONSE_TIMEOUT_S", "10.0"))
+    )
+    ble_scan_timeout_s: float = field(
+        default_factory=lambda: float(os.getenv("BLINDSPOT_BLE_SCAN_TIMEOUT_S", "8.0"))
+    )
+    ble_phone_name: str = field(
+        default_factory=lambda: os.getenv("BLINDSPOT_BLE_PHONE_NAME", "Blind Spot")
+    )
+    ble_phone_service_uuid: str = field(
+        default_factory=lambda: os.getenv(
+            "BLINDSPOT_BLE_PHONE_SERVICE_UUID", "9b7d0001-6c9e-4f2a-9f1a-9b11d5070001"
+        )
+    )
+    ble_phone_write_uuid: str = field(
+        default_factory=lambda: os.getenv(
+            "BLINDSPOT_BLE_PHONE_WRITE_UUID", "9b7d0002-6c9e-4f2a-9f1a-9b11d5070001"
+        )
+    )
+    ble_phone_notify_uuid: str = field(
+        default_factory=lambda: os.getenv(
+            "BLINDSPOT_BLE_PHONE_NOTIFY_UUID", "9b7d0003-6c9e-4f2a-9f1a-9b11d5070001"
+        )
     )
     serial_enabled: bool = field(
         default_factory=lambda: _env_bool("BLINDSPOT_SERIAL_ENABLED", False)
