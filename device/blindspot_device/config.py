@@ -154,6 +154,18 @@ class DeviceConfig:
     ble_response_timeout_s: float = field(
         default_factory=lambda: float(os.getenv("BLINDSPOT_BLE_RESPONSE_TIMEOUT_S", "10.0"))
     )
+    serial_enabled: bool = field(
+        default_factory=lambda: _env_bool("BLINDSPOT_SERIAL_ENABLED", False)
+    )
+    serial_port: str = field(
+        default_factory=lambda: os.getenv("BLINDSPOT_SERIAL_PORT", "/dev/ttyGS0")
+    )
+    serial_baud: int = field(
+        default_factory=lambda: int(os.getenv("BLINDSPOT_SERIAL_BAUD", "115200"))
+    )
+    serial_commands_enabled: bool = field(
+        default_factory=lambda: _env_bool("BLINDSPOT_SERIAL_COMMANDS", False)
+    )
 
     def ensure_dirs(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
