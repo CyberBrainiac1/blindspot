@@ -17,7 +17,7 @@ The interactive phone demo is built as a static GitHub Pages app in
 [`docs/iphone-demo`](docs/iphone-demo). When Pages is enabled for this repo, it
 opens at:
 
-https://ronyboxer.github.io/blindspot/iphone-demo/
+https://cyberbrainiac1.github.io/blindspot/iphone-demo/
 
 | Hazard map | Live ride recording |
 |---|---|
