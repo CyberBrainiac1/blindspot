@@ -1,38 +1,25 @@
-const hazardTypes = {
-  pothole: { label: "Pothole", color: "#ee5634", icon: "icon-record" },
-  debris: { label: "Debris", color: "#e6bc00", icon: "icon-flag" },
-  glass: { label: "Glass", color: "#2bb3c0", icon: "icon-warning" },
-  water: { label: "Water", color: "#3b82f6", icon: "icon-warning" },
-  blockedLane: { label: "Blocked Lane", color: "#e5484d", icon: "icon-warning" },
-  construction: { label: "Construction", color: "#ff8a00", icon: "icon-warning" },
-  noBikeLane: { label: "No Bike Lane", color: "#e5484d", icon: "icon-warning" },
-  roughSurface: { label: "Rough Surface", color: "#ff8a00", icon: "icon-warning" },
-  capturedPhoto: { label: "Captured Photo", color: "#ee5634", icon: "icon-camera" }
-};
-
-const titles = {
-  map: "Hazard Map",
-  record: "Record",
-  rides: "Rides",
-  profile: "Profile",
-  recap: "Recap",
-  pairing: "Pi Pairing"
-};
-
 const SUPABASE_CONFIG_STORAGE_KEY = "blindspot.supabase.config";
-const SAN_JOSE_BOUNDS = {
-  minLat: 37.326,
-  maxLat: 37.35,
-  minLng: -121.899,
-  maxLng: -121.875
+const SAN_JOSE = [37.3382, -121.8863];
+const DEFAULT_SUPABASE_URL = "https://uyfopvdeiprsidzlxrzj.supabase.co";
+
+const hazardTypes = {
+  pothole: { label: "Pothole", color: "#ee5634", icon: "circle_fill" },
+  debris: { label: "Debris", color: "#e6bc00", icon: "flag_fill" },
+  glass: { label: "Glass", color: "#2bb3c0", icon: "exclamationmark_triangle_fill" },
+  water: { label: "Water", color: "#3b82f6", icon: "drop_fill" },
+  blockedLane: { label: "Blocked Lane", color: "#e5484d", icon: "car_fill" },
+  construction: { label: "Construction", color: "#ff8a00", icon: "hammer_fill" },
+  noBikeLane: { label: "No Bike Lane", color: "#e5484d", icon: "xmark_circle_fill" },
+  roughSurface: { label: "Rough Surface", color: "#ff8a00", icon: "waveform_path" },
+  capturedPhoto: { label: "Captured Photo", color: "#ee5634", icon: "camera_fill" }
 };
 
 let hazards = [
-  { id: "h1", type: "pothole", x: 36, y: 26, status: "Confirmed", confirmations: 12, age: "2h ago" },
-  { id: "h2", type: "glass", x: 58, y: 40, status: "Confirmed", confirmations: 5, age: "6h ago" },
-  { id: "h3", type: "construction", x: 72, y: 21, status: "Reported", confirmations: 1, age: "8h ago" },
-  { id: "h4", type: "blockedLane", x: 30, y: 66, status: "Confirmed", confirmations: 9, age: "3h ago" },
-  { id: "h5", type: "water", x: 68, y: 68, status: "Reported", confirmations: 1, age: "3h ago" }
+  { id: "h1", type: "pothole", lat: 37.3419, lng: -121.8907, status: "Confirmed", confirmations: 12, age: "2h ago" },
+  { id: "h2", type: "glass", lat: 37.3368, lng: -121.8847, status: "Confirmed", confirmations: 5, age: "6h ago" },
+  { id: "h3", type: "construction", lat: 37.3432, lng: -121.8795, status: "Reported", confirmations: 1, age: "8h ago" },
+  { id: "h4", type: "blockedLane", lat: 37.3331, lng: -121.8920, status: "Confirmed", confirmations: 9, age: "3h ago" },
+  { id: "h5", type: "water", lat: 37.3324, lng: -121.8811, status: "Reported", confirmations: 1, age: "3h ago" }
 ];
 
 let rides = [
@@ -51,10 +38,7 @@ let rides = [
     ratingWord: "Good",
     score: 82,
     tags: ["green_lane", "pothole", "smooth_surface"],
-    events: [
-      { icon: "icon-flag", x: 36, y: 56 },
-      { icon: "icon-warning", x: 67, y: 38 }
-    ],
+    events: [{ x: 36, y: 56, icon: "flag_fill" }, { x: 67, y: 38, icon: "exclamationmark_triangle_fill" }],
     photos: ["manual", "machine", "machine"]
   },
   {
@@ -72,11 +56,7 @@ let rides = [
     ratingWord: "Fair",
     score: 67,
     tags: ["painted_lane", "glass", "debris", "hard_brake"],
-    events: [
-      { icon: "icon-flag", x: 29, y: 63 },
-      { icon: "icon-warning", x: 58, y: 45 },
-      { icon: "icon-warning", x: 71, y: 34 }
-    ],
+    events: [{ x: 29, y: 63, icon: "flag_fill" }, { x: 58, y: 45, icon: "exclamationmark_triangle_fill" }, { x: 71, y: 34, icon: "exclamationmark_triangle_fill" }],
     photos: ["machine", "machine", "manual"]
   },
   {
@@ -94,15 +74,14 @@ let rides = [
     ratingWord: "Good",
     score: 91,
     tags: ["smooth_surface", "low_traffic", "no_potholes"],
-    events: [
-      { icon: "icon-flag", x: 48, y: 48 }
-    ],
+    events: [{ x: 48, y: 48, icon: "flag_fill" }],
     photos: []
   }
 ];
 
-let activeTab = "map";
-let detailParent = null;
+let f7;
+let map;
+let hazardLayer;
 let currentRide = null;
 let recordTimer = null;
 let startedAt = 0;
@@ -110,11 +89,9 @@ let elapsedSeconds = 0;
 let flaggedDuringRide = 0;
 let sosTimer = null;
 let sosCount = 8;
-let bleLog = [
-  "advertising started",
-  "connected: BlindSpot-Pi",
-  "rx ride_start -> ready"
-];
+let bleLog = ["advertising started", "connected: BlindSpot-Pi", "rx ride_start -> ready"];
+let pairingPopup = null;
+let recapPopup = null;
 let supabaseClient = null;
 let supabaseChannel = null;
 let supabaseConfig = null;
@@ -128,74 +105,6 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const seedHazards = clone(hazards);
 const seedRides = clone(rides);
 
-function icon(id) {
-  return `<svg aria-hidden="true"><use href="#${id}"></use></svg>`;
-}
-
-function setTitle(screen) {
-  $("#screenTitle").textContent = titles[screen] || "Blind Spot";
-  $("#backButton").classList.toggle("is-hidden", !detailParent);
-  $("#headerAction").classList.toggle("is-hidden", screen !== "map");
-}
-
-function showScreen(screen, options = {}) {
-  $$(".screen-view").forEach((view) => {
-    view.classList.toggle("active", view.dataset.screen === screen);
-  });
-
-  if (!options.keepTab) {
-    activeTab = screen;
-  }
-
-  $$(".tab").forEach((tab) => {
-    tab.classList.toggle("active", tab.dataset.tab === activeTab);
-  });
-
-  setTitle(screen);
-}
-
-function showTab(tab) {
-  detailParent = null;
-  openRecapRideId = null;
-  activeTab = tab;
-  showScreen(tab);
-}
-
-function showDetail(screen, parentTab) {
-  detailParent = parentTab;
-  showScreen(screen, { keepTab: true });
-}
-
-function toast(message) {
-  const node = $("#toast");
-  node.textContent = message;
-  node.classList.add("show");
-  window.clearTimeout(node._timer);
-  node._timer = window.setTimeout(() => node.classList.remove("show"), 1700);
-}
-
-function openSheet(title, actions) {
-  $("#sheetTitle").textContent = title;
-  const container = $("#sheetActions");
-  container.innerHTML = "";
-  actions.forEach((action) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `sheet-action${action.danger ? " danger" : ""}`;
-    button.textContent = action.label;
-    button.addEventListener("click", () => {
-      closeSheet();
-      action.onClick();
-    });
-    container.appendChild(button);
-  });
-  $("#actionSheet").classList.remove("hidden");
-}
-
-function closeSheet() {
-  $("#actionSheet").classList.add("hidden");
-}
-
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -207,6 +116,58 @@ function escapeHtml(value) {
 
 function escapeAttribute(value) {
   return escapeHtml(value).replaceAll("`", "&#096;");
+}
+
+function titleCase(value) {
+  return String(value || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function unique(values) {
+  return [...new Set(values.filter(Boolean).map(String))];
+}
+
+function arrayFrom(value) {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [value];
+    } catch {
+      return value.split(",").map((item) => item.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
+function numberFrom(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return 0;
+}
+
+function formatDuration(seconds) {
+  const min = Math.floor(seconds / 60).toString().padStart(2, "0");
+  const sec = Math.floor(seconds % 60).toString().padStart(2, "0");
+  return `${min}:${sec}`;
+}
+
+function formatRideDate(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "Today";
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
+function formatMilesFromMeters(meters) {
+  return (Math.max(0, meters) / 1609.344).toFixed(2);
+}
+
+function formatMphFromMps(mps) {
+  return (Math.max(0, mps) * 2.236936).toFixed(1);
 }
 
 function getHazardType(type) {
@@ -225,75 +186,508 @@ function toSnakeHazardType(type) {
   return String(type).replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
 
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function coordinateToScreen(lat, lng) {
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return null;
-  }
-  const x = ((lng - SAN_JOSE_BOUNDS.minLng) / (SAN_JOSE_BOUNDS.maxLng - SAN_JOSE_BOUNDS.minLng)) * 100;
-  const y = (1 - ((lat - SAN_JOSE_BOUNDS.minLat) / (SAN_JOSE_BOUNDS.maxLat - SAN_JOSE_BOUNDS.minLat))) * 100;
-  return { x: clamp(Math.round(x), 8, 92), y: clamp(Math.round(y), 12, 82) };
-}
-
-function screenToCoordinate(x, y) {
-  const lng = SAN_JOSE_BOUNDS.minLng + (clamp(x, 0, 100) / 100) * (SAN_JOSE_BOUNDS.maxLng - SAN_JOSE_BOUNDS.minLng);
-  const lat = SAN_JOSE_BOUNDS.minLat + (1 - clamp(y, 0, 100) / 100) * (SAN_JOSE_BOUNDS.maxLat - SAN_JOSE_BOUNDS.minLat);
-  return { lat, lng };
-}
-
 function seededPosition(seed) {
+  const text = String(seed || "seed");
   let hash = 0;
-  for (const char of String(seed)) {
-    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  }
+  for (const char of text) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return {
-    x: 18 + (hash % 65),
-    y: 18 + ((hash >>> 8) % 56)
+    x: 20 + (hash % 60),
+    y: 24 + ((hash >> 8) % 54)
   };
 }
 
-function numberFrom(...values) {
-  for (const value of values) {
-    if (value === null || value === undefined || value === "") continue;
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
+function seededCoordinate(seed) {
+  const pos = seededPosition(seed);
+  return {
+    lat: 37.326 + ((100 - pos.y) / 100) * 0.024,
+    lng: -121.899 + (pos.x / 100) * 0.024
+  };
+}
+
+function f7Icon(name) {
+  return `<i class="f7-icons">${escapeHtml(name)}</i>`;
+}
+
+function toast(text) {
+  if (!f7) return;
+  f7.toast.create({
+    text,
+    closeTimeout: 1700,
+    position: "center",
+    cssClass: "bs-toast"
+  }).open();
+}
+
+function openActions(title, actions) {
+  f7.actions.create({
+    buttons: [
+      [{ text: title, label: true }],
+      ...actions.map((action) => [{
+        text: action.label,
+        color: action.danger ? "red" : undefined,
+        bold: action.bold,
+        onClick: action.onClick
+      }]),
+      [{ text: "Cancel", color: "red" }]
+    ]
+  }).open();
+}
+
+function initFramework() {
+  f7 = new Framework7({
+    el: "#app",
+    theme: "ios",
+    name: "Blind Spot",
+    iosTranslucentBars: false,
+    touch: {
+      fastClicks: true
+    }
+  });
+
+  f7.on("tabShow", () => {
+    window.setTimeout(() => {
+      if (map) map.invalidateSize();
+    }, 120);
+  });
+}
+
+function initMap() {
+  map = L.map("hazardMapCanvas", {
+    zoomControl: false,
+    attributionControl: true
+  }).setView(SAN_JOSE, 14);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap"
+  }).addTo(map);
+
+  L.control.zoom({ position: "bottomright" }).addTo(map);
+  hazardLayer = L.layerGroup().addTo(map);
+
+  map.on("click", (event) => {
+    addHazardAtCoordinate(event.latlng.lat, event.latlng.lng);
+  });
+}
+
+function renderHazards() {
+  if (!hazardLayer) return;
+  hazardLayer.clearLayers();
+
+  hazards.forEach((hazard) => {
+    const type = getHazardType(hazard.type);
+    const coord = Number.isFinite(Number(hazard.lat)) && Number.isFinite(Number(hazard.lng))
+      ? { lat: Number(hazard.lat), lng: Number(hazard.lng) }
+      : seededCoordinate(hazard.id);
+    const marker = L.marker([coord.lat, coord.lng], {
+      icon: L.divIcon({
+        className: "",
+        html: `<button class="hazard-marker" type="button" style="--pin-color:${type.color}" aria-label="${escapeAttribute(type.label)}">${f7Icon(type.icon)}</button>`,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+      })
+    });
+    marker.on("click", (event) => {
+      event.originalEvent?.stopPropagation();
+      openHazardActions(hazard.id);
+    });
+    marker.addTo(hazardLayer);
+  });
+
+  $("#hazardList").innerHTML = hazards.map((hazard) => {
+    const type = getHazardType(hazard.type);
+    return `
+      <button class="hazard-row" type="button" data-hazard="${escapeAttribute(hazard.id)}">
+        <span class="hazard-dot" style="--pin-color:${type.color}">${f7Icon(type.icon)}</span>
+        <span>
+          <strong>${escapeHtml(type.label)}</strong>
+          <small>${escapeHtml(hazard.status)} - ${escapeHtml(hazard.confirmations)} confirms - ${escapeHtml(hazard.age)}</small>
+        </span>
+        <span class="pill">${escapeHtml(hazard.status)}</span>
+      </button>
+    `;
+  }).join("");
+
+  $("#hazardCount").textContent = hazards.length;
+}
+
+function addHazardAtCoordinate(lat, lng) {
+  openActions("Add a hazard here", Object.entries(hazardTypes).map(([key, type]) => ({
+    label: type.label,
+    onClick: async () => {
+      const hazard = {
+        id: `h${Date.now()}`,
+        type: key,
+        lat,
+        lng,
+        status: "Reported",
+        confirmations: 1,
+        age: "now"
+      };
+      hazards.unshift(hazard);
+      renderHazards();
+      toast(`${type.label} added`);
+      await saveHazardToSupabase(hazard);
+    }
+  })));
+}
+
+function openHazardActions(id) {
+  const hazard = hazards.find((item) => item.id === id);
+  if (!hazard) return;
+  const type = getHazardType(hazard.type);
+  openActions(type.label, [
+    { label: "Report (email)", onClick: () => toast("Report draft opened") },
+    {
+      label: "Confirm still here",
+      onClick: () => {
+        hazard.status = "Confirmed";
+        hazard.confirmations += 1;
+        hazard.age = "now";
+        renderHazards();
+        toast("Hazard confirmed");
+      }
+    },
+    {
+      label: "Delete",
+      danger: true,
+      onClick: () => {
+        hazards = hazards.filter((item) => item.id !== id);
+        renderHazards();
+        toast("Hazard deleted");
+      }
+    }
+  ]);
+}
+
+function renderRides() {
+  $("#rideList").innerHTML = rides.map((ride) => `
+    <article class="ride-card">
+      <div class="ride-top">
+        <button class="ride-title" data-open-ride="${escapeAttribute(ride.id)}" type="button">
+          ${ride.favorite ? '<span class="favorite-star" aria-hidden="true">*</span>' : ""}
+          <strong>${escapeHtml(ride.date)}</strong>
+        </button>
+        ${safetyBadge(ride.safety)}
+      </div>
+      <button class="row-stats" data-open-ride="${escapeAttribute(ride.id)}" type="button">
+        <span class="row-stat"><strong>${escapeHtml(ride.distance)}</strong><span>DISTANCE</span></span>
+        <span class="row-stat"><strong>${escapeHtml(ride.duration)}</strong><span>DURATION</span></span>
+        <span class="row-stat"><strong>${escapeHtml(ride.avg)}</strong><span>AVG</span></span>
+      </button>
+      <div class="ride-actions">
+        <span class="stars" aria-label="${ride.rating || 0} star rating">${renderStars(ride.rating, ride.id)}</span>
+        <span>
+          <button class="icon-button" type="button" data-favorite="${escapeAttribute(ride.id)}" aria-label="Favorite ride">${f7Icon("star_fill")}</button>
+          <button class="icon-button" type="button" data-delete-ride="${escapeAttribute(ride.id)}" aria-label="Delete ride">${f7Icon("trash_fill")}</button>
+        </span>
+      </div>
+    </article>
+  `).join("");
+}
+
+function safetyBadge(score) {
+  const displayScore = Number.isFinite(Number(score)) ? Number(score) : 0;
+  const color = displayScore >= 80 ? "#30a46c" : displayScore >= 60 ? "#ff8a00" : "#e5484d";
+  return `<span class="safety-badge" style="--badge-color:${color}">${f7Icon("shield_lefthalf_fill")}${displayScore || "-"}</span>`;
+}
+
+function renderStars(rating, rideId) {
+  let html = "";
+  for (let i = 1; i <= 5; i += 1) {
+    html += `
+      <button class="star-button ${i <= rating ? "filled" : ""}" type="button" data-rate="${escapeAttribute(`${rideId}:${i}`)}" aria-label="${i} stars">
+        ${f7Icon(i <= rating ? "star_fill" : "star")}
+      </button>
+    `;
   }
-  return 0;
+  return html;
 }
 
-function arrayFrom(value) {
-  if (Array.isArray(value)) return value.filter(Boolean);
-  if (value && typeof value === "object") return Object.values(value).filter(Boolean);
-  if (typeof value === "string" && value.trim()) return [value.trim()];
-  return [];
+function openRecap(id) {
+  const ride = rides.find((item) => item.id === id);
+  if (!ride) return;
+  openRecapRideId = id;
+  if (recapPopup) recapPopup.close(true);
+
+  const scoreColor = ride.score >= 80 ? "#30a46c" : ride.score >= 50 ? "#ff8a00" : "#e5484d";
+  recapPopup = f7.popup.create({
+    cssClass: "recap-sheet",
+    content: `
+      <div class="popup recap-sheet">
+        <div class="page">
+          <div class="navbar">
+            <div class="navbar-bg"></div>
+            <div class="navbar-inner">
+              <div class="left"><a class="link popup-close" href="#">Back</a></div>
+              <div class="title">Recap</div>
+              <div class="right"></div>
+            </div>
+          </div>
+          <div class="page-content">
+            <div class="profile-stack">
+              <div class="route-preview">
+                ${ride.events.map((event) => `<span class="event-marker" style="left:${event.x}%;top:${event.y}%">${f7Icon(event.icon || "flag_fill")}</span>`).join("")}
+              </div>
+              <div class="bs-card">
+                <div class="stat-grid">
+                  <div class="stat-tile"><strong>${escapeHtml(ride.distance)}</strong><span>mi</span><small>DISTANCE</small></div>
+                  <div class="stat-tile"><strong>${escapeHtml(ride.duration)}</strong><small>DURATION</small></div>
+                  <div class="stat-tile"><strong>${escapeHtml(ride.avg)}</strong><span>mph</span><small>AVG SPEED</small></div>
+                  <div class="stat-tile"><strong>${escapeHtml(ride.hazards)}</strong><small>HAZARDS</small></div>
+                </div>
+              </div>
+              <div class="bs-card">
+                <div class="section-heading">
+                  <span>AI RIDE SUMMARY</span>
+                  <span class="ai-badge" style="--badge-color:${scoreColor}">${escapeHtml(ride.ratingWord)} ${escapeHtml(ride.score || "-")}</span>
+                </div>
+                <p class="summary-text">${escapeHtml(ride.summary)}</p>
+                ${ride.potholes ? `<p class="muted">${ride.potholes} pothole${ride.potholes === 1 ? "" : "s"} detected</p>` : ""}
+                <div class="chips">${ride.tags.map((tag) => `<span class="chip">${escapeHtml(String(tag).replaceAll("_", " "))}</span>`).join("")}</div>
+              </div>
+              <div class="bs-card">
+                <div class="section-heading"><span>RATE THIS RIDE</span></div>
+                <div class="stars">${renderStars(ride.rating, ride.id)}</div>
+              </div>
+              <div class="bs-card">
+                <div class="section-heading">
+                  <span>PHOTOS</span>
+                  <strong>${ride.photos.length}</strong>
+                </div>
+                <div class="photo-grid">
+                  ${(ride.photos.length ? ride.photos : ["empty", "empty", "empty"]).map((photo) => `
+                    <span class="photo-cell">
+                      ${typeof photo === "object" && photo.url ? `<img src="${escapeAttribute(photo.url)}" alt="">` : f7Icon("photo_fill")}
+                      ${photo === "machine" || photo?.kind === "machine" ? `<span class="machine-dot">${f7Icon("camera_fill")}</span>` : ""}
+                    </span>
+                  `).join("")}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `
+  });
+  recapPopup.open();
 }
 
-function unique(values) {
-  return Array.from(new Set(values.map((value) => String(value).trim()).filter(Boolean)));
+function startRide() {
+  currentRide = {
+    id: `r${Date.now()}`,
+    date: "Today",
+    events: [],
+    photos: ["manual"]
+  };
+  startedAt = Date.now();
+  elapsedSeconds = 0;
+  flaggedDuringRide = 0;
+  $("#recordIdle").classList.add("hidden");
+  $("#recordingPanel").classList.remove("hidden");
+  addBleLine(`tx ride_started ${currentRide.id.slice(0, 8)}`);
+  updateTelemetry();
+  recordTimer = window.setInterval(updateTelemetry, 1000);
+  toast("Ride started");
 }
 
-function formatRideDate(value) {
-  const date = value ? new Date(value) : new Date();
-  if (Number.isNaN(date.getTime())) return "Unknown date";
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
+function stopRide() {
+  if (!currentRide) return;
+  window.clearInterval(recordTimer);
+  const miles = Math.max(0.18, elapsedSeconds * 0.0034);
+  const ride = {
+    id: currentRide.id,
+    date: "Today",
+    distance: miles.toFixed(2),
+    duration: formatDuration(elapsedSeconds),
+    avg: (miles / Math.max(elapsedSeconds / 3600, 0.04)).toFixed(1),
+    safety: Math.max(58, 91 - flaggedDuringRide * 7),
+    rating: 0,
+    favorite: false,
+    hazards: flaggedDuringRide,
+    potholes: currentRide.events.filter((event) => event === "pothole").length,
+    summary: flaggedDuringRide
+      ? "The Pi captured ride photos and flagged hazards for review. The recap is ready for rating."
+      : "Clean short ride with no hazards flagged during the demo session.",
+    ratingWord: flaggedDuringRide ? "Fair" : "Good",
+    score: Math.max(58, 91 - flaggedDuringRide * 7),
+    tags: flaggedDuringRide ? ["manual_flags", "pi_photos", "review_needed"] : ["smooth_surface", "no_flags"],
+    events: flaggedDuringRide
+      ? [{ icon: "flag_fill", x: 42, y: 52 }, { icon: "exclamationmark_triangle_fill", x: 65, y: 39 }].slice(0, Math.max(1, Math.min(2, flaggedDuringRide)))
+      : [{ icon: "flag_fill", x: 50, y: 49 }],
+    photos: currentRide.photos
+  };
+  rides.unshift(ride);
+  currentRide = null;
+  $("#recordIdle").classList.remove("hidden");
+  $("#recordingPanel").classList.add("hidden");
+  renderRides();
+  openRecap(ride.id);
+  toast("Ride saved");
 }
 
-function formatMilesFromMeters(meters) {
-  return (Math.max(0, meters) / 1609.344).toFixed(2);
+function updateTelemetry() {
+  elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+  const speed = 12 + Math.sin(elapsedSeconds / 3) * 2.4;
+  const distance = elapsedSeconds * 0.0034;
+  const peak = 1 + flaggedDuringRide * 0.7 + Math.max(0, Math.sin(elapsedSeconds / 4)) * 0.4;
+  $("#speedStat").textContent = speed.toFixed(1);
+  $("#timeStat").textContent = formatDuration(elapsedSeconds);
+  $("#distanceStat").textContent = distance.toFixed(2);
+  $("#peakGStat").textContent = peak.toFixed(1);
 }
 
-function formatMphFromMps(mps) {
-  return (Math.max(0, mps) * 2.236936).toFixed(1);
+function flagHazard(type) {
+  if (!currentRide) return;
+  flaggedDuringRide += 1;
+  currentRide.events.push(type);
+  currentRide.photos.push("manual");
+  const note = $("#flagNote");
+  note.textContent = `${getHazardType(type).label} saved`;
+  note.classList.add("show");
+  window.clearTimeout(note._timer);
+  note._timer = window.setTimeout(() => note.classList.remove("show"), 1500);
+  toast("Photo attached to ride");
+}
+
+function simulateCrash() {
+  sosCount = 8;
+  $("#sosOverlay").classList.remove("hidden");
+  $("#sosTitle").textContent = "CRASH DETECTED";
+  $("#sosCopy").textContent = "Sending SOS in";
+  $("#sosCountdown").textContent = sosCount;
+  $("#sosCountdown").style.display = "block";
+  $("#sosContact").textContent = "Will alert: Alex - (555) 910-2211";
+  $("#cancelSosButton").textContent = "I'M OK - CANCEL";
+  window.clearInterval(sosTimer);
+  sosTimer = window.setInterval(() => {
+    sosCount -= 1;
+    $("#sosCountdown").textContent = sosCount;
+    if (sosCount <= 0) {
+      window.clearInterval(sosTimer);
+      $("#sosTitle").textContent = "SOS SENT";
+      $("#sosCopy").textContent = "Emergency contact was notified.";
+      $("#sosCountdown").style.display = "none";
+      $("#sosContact").textContent = "(Mock demo - no message was sent.)";
+      $("#cancelSosButton").textContent = "DISMISS";
+      addBleLine("crash_sos countdown completed");
+    }
+  }, 1000);
+}
+
+function dismissSos() {
+  window.clearInterval(sosTimer);
+  $("#sosOverlay").classList.add("hidden");
+  addBleLine("crash_sos dismissed");
+}
+
+function addBleLine(line) {
+  bleLog.unshift(line);
+  bleLog = bleLog.slice(0, 7);
+  renderBleLog();
+}
+
+function renderBleLog() {
+  const container = $("#bleLog");
+  if (!container) return;
+  container.innerHTML = bleLog.map((line) => `<span>${escapeHtml(line)}</span>`).join("");
+}
+
+function showMainTab(selector) {
+  $$(".views > .view.tab").forEach((view) => {
+    view.classList.toggle("tab-active", `#${view.id}` === selector);
+  });
+  $$(".toolbar .bs-tab-link").forEach((link) => {
+    link.classList.toggle("is-active", link.dataset.tabTarget === selector);
+  });
+  window.setTimeout(() => {
+    if (map) map.invalidateSize();
+  }, 100);
+}
+
+window.bsShowTab = showMainTab;
+
+function openPairing() {
+  if (pairingPopup) pairingPopup.close(true);
+  pairingPopup = f7.popup.create({
+    cssClass: "pairing-sheet",
+    content: `
+      <div class="popup pairing-sheet">
+        <div class="page">
+          <div class="navbar">
+            <div class="navbar-bg"></div>
+            <div class="navbar-inner">
+              <div class="left"><a class="link popup-close" href="#">Back</a></div>
+              <div class="title">Pi Pairing</div>
+              <div class="right"></div>
+            </div>
+          </div>
+          <div class="page-content">
+            <div class="profile-stack">
+              <div class="bs-card">
+                <label class="split-row">
+                  <span>Bluetooth Pairing</span>
+                  <label class="toggle toggle-init">
+                    <input id="pairingToggle" type="checkbox" checked>
+                    <span class="toggle-icon"></span>
+                  </label>
+                </label>
+                <p class="muted">Keep the app open while pairing with the Pi.</p>
+              </div>
+              <div class="bs-card">
+                <div class="section-heading"><span>STATUS</span></div>
+                <div class="status-row"><span>Bluetooth</span><strong class="ok">On</strong></div>
+                <div class="status-row"><span>Advertising</span><strong class="ok" id="advertisingStatus">Yes</strong></div>
+                <div class="status-row"><span>Pi connected</span><strong class="ok">BlindSpot-Pi</strong></div>
+                <div class="status-row"><span>Active ride</span><strong>${currentRide ? currentRide.id.slice(0, 8) : "-"}</strong></div>
+                <div class="status-row"><span>Last command</span><strong id="lastCommandStatus">ride_start</strong></div>
+                <div class="status-row"><span>Last response</span><strong id="lastResponseStatus">ready</strong></div>
+              </div>
+              <div class="bs-card">
+                <div class="section-heading"><span>LOG</span></div>
+                <div class="ble-log" id="bleLog"></div>
+                <button class="primary-control" id="simulatePiCommand" type="button">Simulate Pi command</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `,
+    on: {
+      opened() {
+        renderBleLog();
+      }
+    }
+  });
+  pairingPopup.open();
+}
+
+function handlePairingToggle(event) {
+  const on = event.target.checked;
+  const status = $("#advertisingStatus");
+  if (status) {
+    status.textContent = on ? "Yes" : "No";
+    status.classList.toggle("ok", on);
+  }
+  $("#pairingSummary").textContent = on ? "Advertising" : "Off";
+  addBleLine(on ? "advertising started" : "advertising stopped");
+}
+
+function simulatePiCommand() {
+  const command = currentRide ? "ride_stop" : "ride_start";
+  const lastCommand = $("#lastCommandStatus");
+  const lastResponse = $("#lastResponseStatus");
+  if (lastCommand) lastCommand.textContent = command;
+  if (lastResponse) lastResponse.textContent = currentRide ? "finish requested" : "ride id issued";
+  addBleLine(`rx ${command} -> ok`);
+  toast("Pi command received");
 }
 
 function getStoredSupabaseConfig() {
   const runtime = window.BLINDSPOT_SUPABASE_CONFIG;
-  if (runtime?.url && runtime?.publishableKey) {
+  if ((runtime?.url || DEFAULT_SUPABASE_URL) && runtime?.publishableKey) {
     return {
-      url: runtime.url.trim(),
+      url: String(runtime.url || DEFAULT_SUPABASE_URL).trim(),
       publishableKey: runtime.publishableKey.trim()
     };
   }
@@ -310,6 +704,25 @@ function getStoredSupabaseConfig() {
     localStorage.removeItem(SUPABASE_CONFIG_STORAGE_KEY);
   }
   return null;
+}
+
+function loadOptionalScript(src) {
+  return new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = false;
+    script.onload = () => resolve(true);
+    script.onerror = () => {
+      script.remove();
+      resolve(false);
+    };
+    document.head.appendChild(script);
+  });
+}
+
+async function loadRuntimeConfig() {
+  await loadOptionalScript("./config.js");
+  await loadOptionalScript("./config.local.js");
 }
 
 function setSyncStatus(mode, message) {
@@ -330,11 +743,11 @@ function setSyncStatus(mode, message) {
 
 function restoreSupabaseForm() {
   const config = getStoredSupabaseConfig();
-  if ($("#supabaseUrlInput") && config) {
-    $("#supabaseUrlInput").value = config.url;
-    $("#supabaseKeyInput").value = config.publishableKey;
+  if ($("#supabaseUrlInput")) {
+    $("#supabaseUrlInput").value = config?.url || DEFAULT_SUPABASE_URL;
+    $("#supabaseKeyInput").value = config?.publishableKey || "";
   }
-  setSyncStatus(config ? "loading" : "mock", config ? "Ready to sync" : "Mock data");
+  setSyncStatus(config ? "loading" : "mock", config ? "Ready to sync" : "Waiting for Supabase key");
 }
 
 async function connectSupabaseFromForm() {
@@ -355,7 +768,7 @@ async function connectSupabaseFromForm() {
 async function initSupabase() {
   supabaseConfig = getStoredSupabaseConfig();
   if (!supabaseConfig) {
-    setSyncStatus("mock", "Mock data");
+    setSyncStatus("mock", "Waiting for Supabase key");
     return;
   }
   if (!window.supabase?.createClient) {
@@ -395,9 +808,7 @@ async function selectTable(table, applyQuery, options = {}) {
   if (applyQuery) query = applyQuery(query);
   const { data, error } = await query;
   if (error) {
-    if (options.required) {
-      throw new Error(`${table}: ${error.message}`);
-    }
+    if (options.required) throw new Error(`${table}: ${error.message}`);
     console.warn(`Supabase ${table} skipped:`, error.message);
     return [];
   }
@@ -409,10 +820,7 @@ async function syncFromSupabase() {
   syncBusy = true;
   setSyncStatus("loading", "Syncing from Supabase");
   try {
-    await Promise.all([
-      loadSupabaseRides(),
-      loadSupabaseHazards()
-    ]);
+    await Promise.all([loadSupabaseRides(), loadSupabaseHazards()]);
     setSyncStatus("live", `Live: ${rides.length} rides, ${hazards.length} hazards`);
     if (openRecapRideId) openRecap(openRecapRideId);
   } catch (error) {
@@ -430,21 +838,13 @@ function scheduleSupabaseSync() {
 
 function subscribeSupabaseRealtime() {
   if (!supabaseClient) return;
-  if (supabaseChannel) {
-    supabaseClient.removeChannel(supabaseChannel);
-  }
+  if (supabaseChannel) supabaseClient.removeChannel(supabaseChannel);
   supabaseChannel = supabaseClient.channel("blindspot-phone-demo");
   ["rides", "photos", "automated_photos", "ai_summary", "hazards", "ride_events"].forEach((table) => {
-    supabaseChannel.on(
-      "postgres_changes",
-      { event: "*", schema: "public", table },
-      scheduleSupabaseSync
-    );
+    supabaseChannel.on("postgres_changes", { event: "*", schema: "public", table }, scheduleSupabaseSync);
   });
   supabaseChannel.subscribe((status) => {
-    if (status === "SUBSCRIBED") {
-      setSyncStatus("live", `Live: ${rides.length} rides, ${hazards.length} hazards`);
-    }
+    if (status === "SUBSCRIBED") setSyncStatus("live", `Live: ${rides.length} rides, ${hazards.length} hazards`);
   });
 }
 
@@ -461,10 +861,9 @@ async function loadSupabaseHazards() {
   const manualPhotos = await selectTable("photos", (query) =>
     query.order("captured_at", { ascending: false }).limit(100)
   );
-  const photoHazards = manualPhotos
+  hazards = manualPhotos
     .filter((row) => Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lng)))
     .map((row) => photoHazardFromSupabaseRow(row));
-  hazards = photoHazards;
   renderHazards();
 }
 
@@ -519,14 +918,12 @@ function latestByRide(rows) {
 }
 
 function hazardFromSupabaseRow(row) {
-  const position = coordinateToScreen(Number(row.lat), Number(row.lng)) || seededPosition(row.id);
+  const fallback = seededCoordinate(row.id);
   return {
     id: String(row.id),
     type: normalizeHazardType(row.type),
-    x: position.x,
-    y: position.y,
-    lat: Number(row.lat),
-    lng: Number(row.lng),
+    lat: Number.isFinite(Number(row.lat)) ? Number(row.lat) : fallback.lat,
+    lng: Number.isFinite(Number(row.lng)) ? Number(row.lng) : fallback.lng,
     status: titleCase(row.status || "reported"),
     confirmations: Number(row.confirm_count || 1),
     age: relativeAge(row.last_confirmed_at || row.first_reported_at)
@@ -534,12 +931,9 @@ function hazardFromSupabaseRow(row) {
 }
 
 function photoHazardFromSupabaseRow(row) {
-  const position = coordinateToScreen(Number(row.lat), Number(row.lng)) || seededPosition(row.id);
   return {
     id: String(row.id),
     type: "capturedPhoto",
-    x: position.x,
-    y: position.y,
     lat: Number(row.lat),
     lng: Number(row.lng),
     status: "Captured",
@@ -571,7 +965,7 @@ function rideFromSupabaseRow(row, summary, photoRows, eventRows) {
   const events = eventRows.length
     ? eventRows.map((event, index) => eventFromSupabaseRow(event, index))
     : photos.slice(0, 3).map((photo, index) => ({
-      icon: photo.kind === "machine" ? "icon-camera" : "icon-flag",
+      icon: photo.kind === "machine" ? "camera_fill" : "flag_fill",
       ...seededPosition(`${row.id}-${index}`)
     }));
 
@@ -596,11 +990,9 @@ function rideFromSupabaseRow(row, summary, photoRows, eventRows) {
 }
 
 function eventFromSupabaseRow(row, index) {
-  const position = coordinateToScreen(Number(row.lat), Number(row.lng)) || seededPosition(`${row.id || row.ride_id}-${index}`);
   return {
-    icon: row.type === "crash" || row.type === "impact" ? "icon-warning" : "icon-flag",
-    x: position.x,
-    y: position.y
+    icon: row.type === "crash" || row.type === "impact" ? "exclamationmark_triangle_fill" : "flag_fill",
+    ...seededPosition(`${row.id || row.ride_id}-${index}`)
   };
 }
 
@@ -616,20 +1008,11 @@ function relativeAge(value) {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-function titleCase(value) {
-  return String(value || "")
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 async function saveHazardToSupabase(hazard) {
   if (!supabaseClient) return;
-  const coord = Number.isFinite(hazard.lat) && Number.isFinite(hazard.lng)
-    ? { lat: hazard.lat, lng: hazard.lng }
-    : screenToCoordinate(hazard.x, hazard.y);
   const row = {
-    lat: coord.lat,
-    lng: coord.lng,
+    lat: hazard.lat,
+    lng: hazard.lng,
     type: toSnakeHazardType(hazard.type),
     severity: "moderate",
     status: "reported",
@@ -645,342 +1028,49 @@ async function saveHazardToSupabase(hazard) {
   await syncFromSupabase();
 }
 
-function renderHazards() {
-  const pins = $("#hazardPins");
-  pins.innerHTML = hazards.map((hazard) => {
-    const type = getHazardType(hazard.type);
-    return `
-      <button class="map-pin" type="button" data-hazard="${escapeAttribute(hazard.id)}" style="left:${hazard.x}%;top:${hazard.y}%;--pin-color:${type.color}" aria-label="${escapeAttribute(type.label)}">
-        ${icon(type.icon)}
-      </button>
-    `;
-  }).join("");
-
-  $("#hazardList").innerHTML = hazards.map((hazard) => {
-    const type = getHazardType(hazard.type);
-    return `
-      <button class="hazard-row" type="button" data-hazard="${escapeAttribute(hazard.id)}">
-        <span class="hazard-dot" style="--pin-color:${type.color}">${icon(type.icon)}</span>
-        <span>
-          <strong>${escapeHtml(type.label)}</strong>
-          <small>${escapeHtml(hazard.status)} - ${escapeHtml(hazard.confirmations)} confirms - ${escapeHtml(hazard.age)}</small>
-        </span>
-        <span class="pill">${escapeHtml(hazard.status)}</span>
-      </button>
-    `;
-  }).join("");
-
-  $("#hazardCount").textContent = hazards.length;
-}
-
-function addHazardAt(x, y) {
-  openSheet("Add a hazard here", Object.keys(hazardTypes).map((key) => ({
-    label: hazardTypes[key].label,
-    onClick: async () => {
-      const coord = screenToCoordinate(x, y);
-      const hazard = {
-        id: `h${Date.now()}`,
-        type: key,
-        x,
-        y,
-        lat: coord.lat,
-        lng: coord.lng,
-        status: "Reported",
-        confirmations: 1,
-        age: "now"
-      };
-      hazards.unshift(hazard);
-      renderHazards();
-      toast(`${hazardTypes[key].label} added`);
-      await saveHazardToSupabase(hazard);
-    }
-  })));
-}
-
-function openHazardActions(id) {
-  const hazard = hazards.find((item) => item.id === id);
-  if (!hazard) return;
-  const type = hazardTypes[hazard.type];
-  openSheet(type.label, [
-    {
-      label: "Report",
-      onClick: () => toast("Report draft opened")
-    },
-    {
-      label: "Confirm still here",
-      onClick: () => {
-        hazard.status = "Confirmed";
-        hazard.confirmations += 1;
-        hazard.age = "now";
-        renderHazards();
-        toast("Hazard confirmed");
-      }
-    },
-    {
-      label: "Delete",
-      danger: true,
-      onClick: () => {
-        hazards = hazards.filter((item) => item.id !== id);
-        renderHazards();
-        toast("Hazard deleted");
-      }
-    }
-  ]);
-}
-
-function renderRides() {
-  $("#rideList").innerHTML = rides.map((ride) => `
-    <article class="ride-row">
-      <div class="ride-row-header">
-        <button class="ride-row-title" data-open-ride="${escapeAttribute(ride.id)}" type="button">
-          ${ride.favorite ? '<span class="favorite-star" aria-hidden="true">&#9733;</span>' : ""}
-          <strong>${escapeHtml(ride.date)}</strong>
-        </button>
-        ${safetyBadge(ride.safety)}
-      </div>
-      <button class="row-stats" data-open-ride="${escapeAttribute(ride.id)}" type="button">
-        <span class="row-stat"><strong>${escapeHtml(ride.distance)}</strong><span>DISTANCE</span></span>
-        <span class="row-stat"><strong>${escapeHtml(ride.duration)}</strong><span>DURATION</span></span>
-        <span class="row-stat"><strong>${escapeHtml(ride.avg)}</strong><span>AVG</span></span>
-      </button>
-      <div class="ride-row-actions">
-        <button class="icon-button" type="button" data-favorite="${escapeAttribute(ride.id)}" aria-label="Favorite ride">${icon("icon-star")}</button>
-        <button class="icon-button" type="button" data-delete-ride="${escapeAttribute(ride.id)}" aria-label="Delete ride">${icon("icon-trash")}</button>
-        <span class="stars" aria-label="${ride.rating || 0} star rating">${renderStars(ride.rating, ride.id, false)}</span>
-      </div>
-    </article>
-  `).join("");
-}
-
-function safetyBadge(score) {
-  const displayScore = Number.isFinite(Number(score)) ? Number(score) : 0;
-  const color = displayScore >= 80 ? "#30a46c" : displayScore >= 60 ? "#ff8a00" : "#e5484d";
-  return `
-    <span class="safety-badge" style="--badge-color:${color}">
-      ${icon("icon-shield")}
-      ${displayScore || "-"}
-    </span>
-  `;
-}
-
-function renderStars(rating, rideId, large) {
-  let html = "";
-  for (let i = 1; i <= 5; i += 1) {
-    html += `
-      <button class="star-button ${i <= rating ? "filled" : ""}" type="button" data-rate="${escapeAttribute(`${rideId}:${i}`)}" aria-label="${i} stars">
-        ${icon("icon-star")}
-      </button>
-    `;
-  }
-  return html;
-}
-
-function openRecap(id) {
-  const ride = rides.find((item) => item.id === id);
-  if (!ride) return;
-  openRecapRideId = id;
-  const scoreColor = ride.score >= 80 ? "#30a46c" : ride.score >= 50 ? "#ff8a00" : "#e5484d";
-  $("#recapContent").innerHTML = `
-    <div class="card route-card">
-      <div class="road road-a"></div>
-      <div class="road road-b"></div>
-      <div class="route-line"></div>
-      ${ride.events.map((event) => `<span class="event-marker" style="left:${event.x}%;top:${event.y}%">${icon(event.icon)}</span>`).join("")}
-    </div>
-
-    <div class="card">
-      <div class="stat-grid">
-        <div class="stat-tile"><strong>${escapeHtml(ride.distance)}</strong><span>mi</span><small>DISTANCE</small></div>
-        <div class="stat-tile"><strong>${escapeHtml(ride.duration)}</strong><small>DURATION</small></div>
-        <div class="stat-tile"><strong>${escapeHtml(ride.avg)}</strong><span>mph</span><small>AVG SPEED</small></div>
-        <div class="stat-tile"><strong>${escapeHtml(ride.hazards)}</strong><small>HAZARDS</small></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="section-heading">
-        <span>AI RIDE SUMMARY</span>
-        <span class="ai-badge" style="--badge-color:${scoreColor}">${escapeHtml(ride.ratingWord)} ${escapeHtml(ride.score || "-")}</span>
-      </div>
-      <p class="summary-text">${escapeHtml(ride.summary)}</p>
-      ${ride.potholes ? `<p class="muted">${ride.potholes} pothole${ride.potholes === 1 ? "" : "s"} detected</p>` : ""}
-      <div class="chips">${ride.tags.map((tag) => `<span class="chip">${escapeHtml(String(tag).replaceAll("_", " "))}</span>`).join("")}</div>
-    </div>
-
-    <div class="card">
-      <div class="section-heading"><span>RATE THIS RIDE</span></div>
-      <div class="stars">${renderStars(ride.rating, ride.id, true)}</div>
-    </div>
-
-    <div class="card">
-      <div class="section-heading">
-        <span>PHOTOS</span>
-        <strong>${ride.photos.length}</strong>
-      </div>
-      <div class="photo-grid">
-        ${(ride.photos.length ? ride.photos : ["empty", "empty", "empty"]).map((photo) => `
-          <span class="photo-cell">
-            ${typeof photo === "object" && photo.url
-              ? `<img src="${escapeAttribute(photo.url)}" alt="">`
-              : icon("icon-camera")}
-            ${photo === "machine" || photo?.kind === "machine" ? `<span class="machine-dot">${icon("icon-camera")}</span>` : ""}
-          </span>
-        `).join("")}
-      </div>
-    </div>
-  `;
-  showDetail("recap", "rides");
-}
-
-function startRide() {
-  currentRide = {
-    id: `r${Date.now()}`,
-    date: "Today",
-    events: [],
-    photos: ["manual"]
-  };
-  startedAt = Date.now();
-  elapsedSeconds = 0;
-  flaggedDuringRide = 0;
-  $("#recordIdle").classList.add("hidden");
-  $("#recordingPanel").classList.remove("hidden");
-  $("#activeRideStatus").textContent = currentRide.id.slice(0, 8);
-  addBleLine(`tx ride_started ${currentRide.id.slice(0, 8)}`);
-  updateTelemetry();
-  recordTimer = window.setInterval(updateTelemetry, 1000);
-  toast("Ride started");
-}
-
-function stopRide() {
-  if (!currentRide) return;
-  window.clearInterval(recordTimer);
-  const miles = Math.max(0.18, elapsedSeconds * 0.0034);
-  const ride = {
-    id: currentRide.id,
-    date: "Today",
-    distance: miles.toFixed(2),
-    duration: formatDuration(elapsedSeconds),
-    avg: (miles / Math.max(elapsedSeconds / 3600, 0.04)).toFixed(1),
-    safety: Math.max(58, 91 - flaggedDuringRide * 7),
-    rating: 0,
-    favorite: false,
-    hazards: flaggedDuringRide,
-    potholes: currentRide.events.filter((event) => event === "pothole").length,
-    summary: flaggedDuringRide
-      ? "The Pi captured ride photos and flagged hazards for review. The recap is ready for rating."
-      : "Clean short ride with no hazards flagged during the demo session.",
-    ratingWord: flaggedDuringRide ? "Fair" : "Good",
-    score: Math.max(58, 91 - flaggedDuringRide * 7),
-    tags: flaggedDuringRide ? ["manual_flags", "pi_photos", "review_needed"] : ["smooth_surface", "no_flags"],
-    events: flaggedDuringRide
-      ? [{ icon: "icon-flag", x: 42, y: 52 }, { icon: "icon-warning", x: 65, y: 39 }].slice(0, Math.max(1, Math.min(2, flaggedDuringRide)))
-      : [{ icon: "icon-bike", x: 50, y: 49 }],
-    photos: currentRide.photos
-  };
-  rides.unshift(ride);
-  currentRide = null;
-  $("#recordIdle").classList.remove("hidden");
-  $("#recordingPanel").classList.add("hidden");
-  $("#activeRideStatus").textContent = "-";
-  renderRides();
-  openRecap(ride.id);
-  toast("Ride saved");
-}
-
-function updateTelemetry() {
-  elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
-  const speed = 12 + Math.sin(elapsedSeconds / 3) * 2.4;
-  const distance = elapsedSeconds * 0.0034;
-  const peak = 1 + flaggedDuringRide * 0.7 + Math.max(0, Math.sin(elapsedSeconds / 4)) * 0.4;
-  $("#speedStat").textContent = speed.toFixed(1);
-  $("#timeStat").textContent = formatDuration(elapsedSeconds);
-  $("#distanceStat").textContent = distance.toFixed(2);
-  $("#peakGStat").textContent = peak.toFixed(1);
-}
-
-function flagHazard(type) {
-  if (!currentRide) return;
-  flaggedDuringRide += 1;
-  currentRide.events.push(type);
-  currentRide.photos.push("manual");
-  const note = $("#flagNote");
-  note.textContent = `${hazardTypes[type].label} saved`;
-  note.classList.add("show");
-  window.clearTimeout(note._timer);
-  note._timer = window.setTimeout(() => note.classList.remove("show"), 1500);
-  toast("Photo attached to ride");
-}
-
-function simulateCrash() {
-  sosCount = 8;
-  $("#sosOverlay").classList.remove("hidden");
-  $("#sosTitle").textContent = "CRASH DETECTED";
-  $("#sosCopy").textContent = "Sending SOS in";
-  $("#sosCountdown").textContent = sosCount;
-  $("#sosCountdown").style.display = "block";
-  $("#sosContact").textContent = "Will alert: Alex - (555) 910-2211";
-  $("#cancelSosButton").textContent = "I'M OK - CANCEL";
-  window.clearInterval(sosTimer);
-  sosTimer = window.setInterval(() => {
-    sosCount -= 1;
-    $("#sosCountdown").textContent = sosCount;
-    if (sosCount <= 0) {
-      window.clearInterval(sosTimer);
-      $("#sosTitle").textContent = "SOS SENT";
-      $("#sosCopy").textContent = "Emergency contact was notified.";
-      $("#sosCountdown").style.display = "none";
-      $("#sosContact").textContent = "(Mock demo - no message was sent.)";
-      $("#cancelSosButton").textContent = "DISMISS";
-      addBleLine("crash_sos countdown completed");
-    }
-  }, 1000);
-}
-
-function dismissSos() {
-  window.clearInterval(sosTimer);
-  $("#sosOverlay").classList.add("hidden");
-  addBleLine("crash_sos dismissed");
-}
-
-function formatDuration(seconds) {
-  const min = Math.floor(seconds / 60).toString().padStart(2, "0");
-  const sec = Math.floor(seconds % 60).toString().padStart(2, "0");
-  return `${min}:${sec}`;
-}
-
-function addBleLine(line) {
-  bleLog.unshift(line);
-  bleLog = bleLog.slice(0, 6);
-  renderBleLog();
-}
-
-function renderBleLog() {
-  $("#bleLog").innerHTML = bleLog.map((line) => `<span>${line}</span>`).join("");
-}
-
 function attachEvents() {
-  $$(".tab").forEach((tab) => {
-    tab.addEventListener("click", () => showTab(tab.dataset.tab));
+  $("#addHazardFromHeader").addEventListener("click", (event) => {
+    event.preventDefault();
+    addHazardAtCoordinate(SAN_JOSE[0], SAN_JOSE[1]);
   });
 
-  $("#backButton").addEventListener("click", () => {
-    const target = detailParent || activeTab;
-    detailParent = null;
-    showTab(target);
-  });
-
-  $("#headerAction").addEventListener("click", () => addHazardAt(52, 48));
   $("#addHazardButton").addEventListener("click", (event) => {
     event.stopPropagation();
-    addHazardAt(52, 48);
+    addHazardAtCoordinate(SAN_JOSE[0], SAN_JOSE[1]);
   });
 
-  $("#hazardMap").addEventListener("click", (event) => {
-    if (event.target.closest("button")) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = Math.min(92, Math.max(8, ((event.clientX - rect.left) / rect.width) * 100));
-    const y = Math.min(82, Math.max(12, ((event.clientY - rect.top) / rect.height) * 100));
-    addHazardAt(Math.round(x), Math.round(y));
+  $("#startRideButton").addEventListener("click", startRide);
+  $("#stopRideButton").addEventListener("click", stopRide);
+  $("#flagButton").addEventListener("click", () => {
+    openActions("Flag a hazard", Object.entries(hazardTypes).map(([key, type]) => ({
+      label: type.label,
+      onClick: () => flagHazard(key)
+    })));
+  });
+  $("#simulateCrashButton").addEventListener("click", simulateCrash);
+  $("#cancelSosButton").addEventListener("click", dismissSos);
+  $("#pairingCard").addEventListener("click", openPairing);
+  $("#connectSupabaseButton").addEventListener("click", connectSupabaseFromForm);
+  $("#clearSupabaseButton").addEventListener("click", clearSupabaseConfig);
+  $("#syncNowButton").addEventListener("click", () => {
+    if (supabaseClient) syncFromSupabase();
+    else {
+      showMainTab("#view-profile");
+      toast("Add Supabase config");
+    }
+  });
+  $("#chooseContactButton").addEventListener("click", () => toast("Contact selected"));
+
+  document.addEventListener("click", (event) => {
+    const tabLink = event.target.closest(".toolbar .bs-tab-link");
+    if (!tabLink) return;
+    event.preventDefault();
+    event.stopPropagation();
+    showMainTab(tabLink.dataset.tabTarget);
+  }, true);
+
+  document.addEventListener("change", (event) => {
+    if (event.target.id === "pairingToggle") handlePairingToggle(event);
   });
 
   document.addEventListener("click", (event) => {
@@ -1010,60 +1100,24 @@ function attachEvents() {
       const ride = rides.find((item) => item.id === rideId);
       if (ride) ride.rating = Number(value);
       renderRides();
-      if (detailParent) openRecap(rideId);
+      if (recapPopup?.opened) openRecap(rideId);
       toast("Rating saved");
     }
-  });
 
-  $("#startRideButton").addEventListener("click", startRide);
-  $("#stopRideButton").addEventListener("click", stopRide);
-  $("#flagButton").addEventListener("click", () => {
-    openSheet("Flag a hazard", Object.keys(hazardTypes).map((key) => ({
-      label: hazardTypes[key].label,
-      onClick: () => flagHazard(key)
-    })));
-  });
-  $("#simulateCrashButton").addEventListener("click", simulateCrash);
-  $("#cancelSosButton").addEventListener("click", dismissSos);
-
-  $("#pairingCard").addEventListener("click", () => showDetail("pairing", "profile"));
-  $("#pairingToggle").addEventListener("change", (event) => {
-    const on = event.target.checked;
-    $("#advertisingStatus").textContent = on ? "Yes" : "No";
-    $("#advertisingStatus").classList.toggle("ok", on);
-    $("#pairingSummary").textContent = on ? "Advertising" : "Off";
-    addBleLine(on ? "advertising started" : "advertising stopped");
-  });
-  $("#simulatePiCommand").addEventListener("click", () => {
-    const command = currentRide ? "ride_stop" : "ride_start";
-    $("#lastCommandStatus").textContent = command;
-    $("#lastResponseStatus").textContent = currentRide ? "finish requested" : "ride id issued";
-    addBleLine(`rx ${command} -> ok`);
-    toast("Pi command received");
-  });
-  $("#connectSupabaseButton").addEventListener("click", () => {
-    connectSupabaseFromForm();
-  });
-  $("#clearSupabaseButton").addEventListener("click", clearSupabaseConfig);
-  $("#syncNowButton").addEventListener("click", () => {
-    if (supabaseClient) {
-      syncFromSupabase();
-    } else {
-      showTab("profile");
-      toast("Add Supabase config");
-    }
-  });
-  $("#chooseContactButton").addEventListener("click", () => toast("Contact selected"));
-  $("#sheetCancel").addEventListener("click", closeSheet);
-  $("#actionSheet").addEventListener("click", (event) => {
-    if (event.target.id === "actionSheet") closeSheet();
+    if (event.target.closest("#simulatePiCommand")) simulatePiCommand();
   });
 }
 
-renderHazards();
-renderRides();
-renderBleLog();
-attachEvents();
-restoreSupabaseForm();
-initSupabase();
-setTitle("map");
+async function bootstrap() {
+  initFramework();
+  initMap();
+  renderHazards();
+  renderRides();
+  attachEvents();
+  await loadRuntimeConfig();
+  restoreSupabaseForm();
+  await initSupabase();
+  window.setTimeout(() => map.invalidateSize(), 150);
+}
+
+document.addEventListener("DOMContentLoaded", bootstrap);

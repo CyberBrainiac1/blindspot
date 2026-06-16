@@ -1,0 +1,58 @@
+name: Deploy iPhone Demo
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}iphone-demo/
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build static phone demo
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ vars.BLINDSPOT_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.BLINDSPOT_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          cp -R docs/iphone-demo public/iphone-demo
+
+          : "${SUPABASE_URL:=https://uyfopvdeiprsidzlxrzj.supabase.co}"
+          if [ -n "${SUPABASE_PUBLISHABLE_KEY:-}" ]; then
+            cat > public/iphone-demo/config.js <<EOF
+          window.BLINDSPOT_SUPABASE_CONFIG = {
+            url: "$SUPABASE_URL",
+            publishableKey: "$SUPABASE_PUBLISHABLE_KEY"
+          };
+          EOF
+          fi
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
