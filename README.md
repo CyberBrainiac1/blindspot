@@ -21,11 +21,11 @@ https://cyberbrainiac1.github.io/blindspot/iphone-demo/
 
 | Hazard map | Live ride recording |
 |---|---|
-| ![Blind Spot hazard map with colored road hazard pins and a live hazard list.](docs/iphone-demo/assets/screenshots/map.png) | ![Blind Spot recording screen with ride timer, speed, distance, peak G, and a large flag hazard button.](docs/iphone-demo/assets/screenshots/record.png) |
+| ![Blind Spot hazard map with colored road hazard pins.](docs/iphone-demo/assets/screenshots/map.png) | ![Blind Spot recording screen with ride timer, speed, distance, peak G, and a large flag hazard button.](docs/iphone-demo/assets/screenshots/record.png) |
 
-| Ride recap | Supabase sync |
+| Ride recap | Profile |
 |---|---|
-| ![Blind Spot ride recap with route, ride stats, AI ride summary, and hazard tags.](docs/iphone-demo/assets/screenshots/recap.png) | ![Blind Spot profile screen showing the Supabase sync connection card.](docs/iphone-demo/assets/screenshots/profile-sync.png) |
+| ![Blind Spot ride recap with route, ride stats, AI ride summary, and hazard tags.](docs/iphone-demo/assets/screenshots/recap.png) | ![Blind Spot profile screen with rider details, riding preferences, emergency contact, and Bluetooth pairing entry.](docs/iphone-demo/assets/screenshots/profile.png) |
 
 ## The Story
 
@@ -85,9 +85,12 @@ designed for a rider who should not be distracted.
 **Recap** explains the finished ride. It shows the route, distance, duration,
 average speed, hazard count, photos, and a plain-language ride summary.
 
-**Supabase Sync** connects the web demo to the live project data. It reads rides,
-manual photos, automated photos, AI summaries, hazards, and ride events. It uses
-only a publishable/anon browser key and rejects secret keys.
+**Profile** stores rider details, riding preferences, emergency contact setup,
+and the Bluetooth pairing entry for the Raspberry Pi ride-control link.
+
+**Supabase Sync** is automatic in the hosted demo. It reads rides, manual photos,
+automated photos, AI summaries, hazards, and ride events using only a
+publishable browser key injected at deploy time.
 
 ## What Is In This Repo
 
@@ -131,8 +134,9 @@ Then open:
 http://127.0.0.1:4176/iphone-demo/
 ```
 
-For Supabase sync, use the in-app Profile screen and enter the project URL plus a
-publishable/anon key. Do not use a service-role or secret key in the browser.
+For local Supabase sync, copy `docs/iphone-demo/config.example.js` to the ignored
+`docs/iphone-demo/config.local.js` and put only a publishable/anon browser key in
+that local file. Do not put a service-role or secret key in browser config.
 
 ### Web Dashboard
 

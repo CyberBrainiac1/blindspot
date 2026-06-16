@@ -6,10 +6,8 @@
     <title>Blind Spot iPhone Demo</title>
     <meta name="description" content="Interactive GitHub Pages demo of the Blind Spot iPhone app.">
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/framework7@9.0.5/framework7-bundle.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/framework7-icons@5.0.5/css/framework7-icons.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
-    <link rel="stylesheet" href="./styles.css?v=20260616-live-supabase-2">
+    <link rel="stylesheet" href="./styles.css?v=20260616-swiftui-parity-1">
   </head>
   <body>
     <main class="demo-stage">
@@ -17,258 +15,247 @@
         <div class="side-button side-button-left"></div>
         <div class="side-button side-button-right"></div>
         <div class="device-screen">
-          <div class="dynamic-island"></div>
+          <div class="dynamic-island" aria-hidden="true"></div>
           <div class="status-bar" aria-hidden="true">
             <span>9:41</span>
             <span>5G&nbsp;&nbsp;100%</span>
           </div>
 
           <div id="app">
-            <div class="views tabs safe-areas">
-              <div id="view-map" class="view view-main tab tab-active">
-                <div class="page page-map" data-name="map">
-                  <div class="navbar">
-                    <div class="navbar-bg"></div>
-                    <div class="navbar-inner">
-                      <div class="left"></div>
-                      <div class="title">Hazard Map</div>
-                      <div class="right">
-                        <a class="link icon-only" id="addHazardFromHeader" href="#" aria-label="Add hazard">
-                          <i class="f7-icons">plus</i>
-                        </a>
+            <div id="syncStatusText" class="sr-only">Waiting for Supabase key</div>
+
+            <section id="screen-map" class="screen screen-map is-active" aria-label="Hazard Map">
+              <header class="nav-bar nav-charcoal">
+                <span class="nav-side"></span>
+                <h1>Hazard Map</h1>
+                <span class="nav-side nav-live" id="syncDot" aria-hidden="true"></span>
+              </header>
+              <div class="screen-content map-content">
+                <div id="hazardMapCanvas" aria-label="San Jose hazard map"></div>
+                <button class="map-hint" id="addHazardButton" type="button">Tap the map to add a hazard</button>
+              </div>
+            </section>
+
+            <section id="screen-record" class="screen screen-record" aria-label="Record">
+              <header class="nav-bar nav-charcoal">
+                <span class="nav-side"></span>
+                <h1>Record</h1>
+                <span class="nav-side"></span>
+              </header>
+              <div class="screen-content record-content">
+                <div class="record-idle" id="recordIdle">
+                  <button class="big-start" id="startRideButton" type="button">
+                    <span class="big-start-icon" aria-hidden="true"></span>
+                    <span>START</span>
+                  </button>
+                  <p>Tap to start your ride</p>
+                </div>
+
+                <div class="recording hidden" id="recordingPanel">
+                  <div class="bs-card telemetry-card">
+                    <div class="stat-grid">
+                      <div class="stat-tile">
+                        <span><strong id="speedStat">0.0</strong><em>mph</em></span>
+                        <small>SPEED</small>
+                      </div>
+                      <div class="stat-tile">
+                        <span><strong id="timeStat">00:00</strong></span>
+                        <small>TIME</small>
+                      </div>
+                      <div class="stat-tile">
+                        <span><strong id="distanceStat">0.00</strong><em>mi</em></span>
+                        <small>DISTANCE</small>
+                      </div>
+                      <div class="stat-tile">
+                        <span><strong id="peakGStat">1.0</strong><em>g</em></span>
+                        <small>PEAK G</small>
                       </div>
                     </div>
                   </div>
-                  <div class="page-content">
-                    <div class="map-wrap">
-                      <div id="hazardMapCanvas" aria-label="San Jose hazard map"></div>
-                      <button class="map-chip" id="addHazardButton" type="button">
-                        <i class="f7-icons">plus_circle_fill</i>
-                        Tap the map to add a hazard
-                      </button>
-                    </div>
 
-                    <div class="content-block">
-                      <div class="section-heading">
-                        <span>LIVE HAZARDS</span>
-                        <strong id="hazardCount">0</strong>
-                      </div>
-                      <div class="sync-strip">
-                        <span class="sync-dot" id="syncDot"></span>
-                        <span id="syncStatusText">Waiting for Supabase key</span>
-                        <button id="syncNowButton" type="button">Sync</button>
-                      </div>
-                      <div class="hazard-list" id="hazardList"></div>
-                    </div>
+                  <div class="record-center">
+                    <button class="flag-button" id="flagButton" type="button">
+                      <span class="icon-slot" data-icon="flag"></span>
+                      <span>FLAG HAZARD</span>
+                    </button>
+                    <div class="flag-note" id="flagNote">Saved</div>
+                  </div>
+
+                  <div class="record-actions">
+                    <button class="stop-button" id="stopRideButton" type="button">STOP</button>
+                    <button class="ghost-button" id="simulateCrashButton" type="button">
+                      <span class="icon-slot" data-icon="warning"></span>
+                      Simulate crash
+                    </button>
                   </div>
                 </div>
               </div>
+            </section>
 
-              <div id="view-record" class="view tab">
-                <div class="page page-record" data-name="record">
-                  <div class="navbar">
-                    <div class="navbar-bg"></div>
-                    <div class="navbar-inner">
-                      <div class="left"></div>
-                      <div class="title">Record</div>
-                      <div class="right"></div>
-                    </div>
+            <section id="screen-rides" class="screen screen-rides" aria-label="Rides">
+              <header class="nav-bar nav-black">
+                <span class="nav-side"></span>
+                <h1>Rides</h1>
+                <span class="nav-side"></span>
+              </header>
+              <div class="screen-content list-content">
+                <div class="ride-list" id="rideList"></div>
+              </div>
+            </section>
+
+            <section id="screen-profile" class="screen screen-profile" aria-label="Profile">
+              <header class="nav-bar nav-charcoal">
+                <span class="nav-side"></span>
+                <h1>Profile</h1>
+                <span class="nav-side"></span>
+              </header>
+              <div class="screen-content profile-content">
+                <div class="profile-stack">
+                  <div class="bs-card profile-form">
+                    <label>
+                      <span>DISPLAY NAME</span>
+                      <input value="Ronak Rupani" aria-label="Display name">
+                    </label>
+                    <label>
+                      <span>EMAIL</span>
+                      <input value="ronak@example.com" aria-label="Email">
+                    </label>
+                    <label>
+                      <span>PHONE</span>
+                      <input value="(555) 123-4567" aria-label="Phone">
+                    </label>
                   </div>
-                  <div class="page-content record-content">
-                    <div class="record-idle" id="recordIdle">
-                      <button class="big-start" id="startRideButton" type="button">
-                        <i class="f7-icons">figure_cycle</i>
-                        <span>START</span>
-                      </button>
-                      <p>Tap to start your ride</p>
-                    </div>
 
-                    <div class="recording hidden" id="recordingPanel">
-                      <div class="bs-card telemetry-card">
-                        <div class="stat-grid">
-                          <div class="stat-tile">
-                            <strong id="speedStat">0.0</strong>
-                            <span>mph</span>
-                            <small>SPEED</small>
-                          </div>
-                          <div class="stat-tile">
-                            <strong id="timeStat">00:00</strong>
-                            <small>TIME</small>
-                          </div>
-                          <div class="stat-tile">
-                            <strong id="distanceStat">0.00</strong>
-                            <span>mi</span>
-                            <small>DISTANCE</small>
-                          </div>
-                          <div class="stat-tile">
-                            <strong id="peakGStat">1.0</strong>
-                            <span>g</span>
-                            <small>PEAK G</small>
-                          </div>
-                        </div>
-                      </div>
+                  <div class="bs-card picker-card">
+                    <button class="picker-row" type="button">
+                      <span>
+                        <small>SKILL LEVEL</small>
+                        <strong>Advanced</strong>
+                      </span>
+                      <span class="chevron" aria-hidden="true"></span>
+                    </button>
+                    <button class="picker-row" type="button">
+                      <span>
+                        <small>RIDES PER WEEK</small>
+                        <strong>3-4 / week</strong>
+                      </span>
+                      <span class="chevron" aria-hidden="true"></span>
+                    </button>
+                  </div>
 
-                      <div class="record-center">
-                        <button class="flag-button" id="flagButton" type="button">
-                          <i class="f7-icons">flag_fill</i>
-                          <span>FLAG HAZARD</span>
-                        </button>
-                        <div class="flag-note" id="flagNote">Saved</div>
-                      </div>
+                  <div class="bs-card emergency-card">
+                    <div class="section-heading">EMERGENCY CONTACT</div>
+                    <button class="primary-control" id="chooseContactButton" type="button">
+                      <span class="icon-slot" data-icon="person-plus"></span>
+                      Choose from Contacts
+                    </button>
+                    <label>
+                      <span>OR ENTER MANUALLY</span>
+                      <input value="Alex - (555) 910-2211" aria-label="Emergency contact">
+                    </label>
+                    <p>Texted automatically if the crash-SOS countdown isn't dismissed.</p>
+                  </div>
 
-                      <div class="record-actions">
-                        <button class="stop-button" id="stopRideButton" type="button">STOP</button>
-                        <button class="ghost-button" id="simulateCrashButton" type="button">
-                          <i class="f7-icons">exclamationmark_triangle_fill</i>
-                          Simulate crash
-                        </button>
-                      </div>
-                    </div>
+                  <button class="bs-card profile-link-card" id="pairingCard" type="button">
+                    <span class="profile-link-icon"><span class="icon-slot" data-icon="antenna"></span></span>
+                    <span>
+                      <strong>Pi Pairing (Bluetooth)</strong>
+                      <small id="pairingSummary">Advertising</small>
+                    </span>
+                    <span class="chevron" aria-hidden="true"></span>
+                  </button>
+
+                  <div class="bs-card account-card">
+                    <div class="section-heading">ACCOUNT</div>
+                    <p>ronak@example.com</p>
+                    <button type="button">Sign out</button>
                   </div>
                 </div>
               </div>
+            </section>
 
-              <div id="view-rides" class="view tab">
-                <div class="page page-rides" data-name="rides">
-                  <div class="navbar">
-                    <div class="navbar-bg"></div>
-                    <div class="navbar-inner">
-                      <div class="left"></div>
-                      <div class="title">Rides</div>
-                      <div class="right"></div>
-                    </div>
+            <section id="screen-recap" class="screen screen-detail" aria-label="Recap">
+              <header class="nav-bar nav-charcoal">
+                <button class="nav-side back-button" data-back="tabs" type="button">Back</button>
+                <h1>Recap</h1>
+                <span class="nav-side"></span>
+              </header>
+              <div class="screen-content detail-content" id="recapContent"></div>
+            </section>
+
+            <section id="screen-pairing" class="screen screen-detail" aria-label="Pi Pairing">
+              <header class="nav-bar nav-black">
+                <button class="nav-side back-button" data-back="tabs" type="button">Back</button>
+                <h1>Pi Pairing</h1>
+                <span class="nav-side"></span>
+              </header>
+              <div class="screen-content detail-content">
+                <div class="profile-stack">
+                  <div class="bs-card">
+                    <label class="toggle-row">
+                      <span>Bluetooth Pairing</span>
+                      <input id="pairingToggle" type="checkbox" checked>
+                    </label>
+                    <p class="muted">When on, the app advertises over Bluetooth so your Raspberry Pi can start and stop rides. Keep the app open during a ride.</p>
                   </div>
-                  <div class="page-content">
-                    <div class="ride-list" id="rideList"></div>
+
+                  <div class="bs-card status-card">
+                    <div class="section-heading">STATUS</div>
+                    <div class="status-row"><span>Bluetooth</span><strong class="ok">On</strong></div>
+                    <div class="status-row"><span>Advertising</span><strong class="ok" id="advertisingStatus">Yes</strong></div>
+                    <div class="status-row"><span>Pi connected</span><strong class="ok">BlindSpot-Pi</strong></div>
+                    <div class="status-row"><span>Active ride</span><strong id="activeRideStatus">-</strong></div>
+                    <div class="status-row"><span>Last command</span><strong id="lastCommandStatus">ride_start</strong></div>
+                    <div class="status-row"><span>Last response</span><strong id="lastResponseStatus">ready</strong></div>
                   </div>
-                </div>
-              </div>
 
-              <div id="view-profile" class="view tab">
-                <div class="page page-profile" data-name="profile">
-                  <div class="navbar">
-                    <div class="navbar-bg"></div>
-                    <div class="navbar-inner">
-                      <div class="left"></div>
-                      <div class="title">Profile</div>
-                      <div class="right"></div>
-                    </div>
-                  </div>
-                  <div class="page-content">
-                    <div class="profile-stack">
-                      <div class="bs-card profile-form">
-                        <label>
-                          <span>DISPLAY NAME</span>
-                          <input value="Ronak Rupani" aria-label="Display name">
-                        </label>
-                        <label>
-                          <span>EMAIL</span>
-                          <input value="ronak@example.com" aria-label="Email">
-                        </label>
-                        <label>
-                          <span>PHONE</span>
-                          <input value="(555) 123-4567" aria-label="Phone">
-                        </label>
-                      </div>
-
-                      <div class="bs-card">
-                        <button class="profile-link" id="pairingCard" type="button">
-                          <span class="row-icon"><i class="f7-icons">antenna_radiowaves_left_right</i></span>
-                          <span>
-                            <strong>Pi Pairing (Bluetooth)</strong>
-                            <small id="pairingSummary">Advertising</small>
-                          </span>
-                          <i class="f7-icons chevron">chevron_right</i>
-                        </button>
-                      </div>
-
-                      <div class="bs-card profile-form">
-                        <div class="section-heading"><span>EMERGENCY CONTACT</span></div>
-                        <button class="primary-control" id="chooseContactButton" type="button">
-                          <i class="f7-icons">person_crop_circle_badge_plus</i>
-                          Choose from Contacts
-                        </button>
-                        <label>
-                          <span>OR ENTER MANUALLY</span>
-                          <input value="Alex - (555) 910-2211" aria-label="Emergency contact">
-                        </label>
-                        <p class="muted">Texted automatically if the crash-SOS countdown is not dismissed.</p>
-                      </div>
-
-                      <div class="bs-card">
-                        <div class="section-heading"><span>RIDING</span></div>
-                        <div class="split-row"><span>Skill level</span><strong>Advanced</strong></div>
-                        <div class="split-row"><span>Rides per week</span><strong>3-4 / week</strong></div>
-                      </div>
-
-                      <div class="bs-card profile-form">
-                        <div class="section-heading">
-                          <span>SUPABASE SYNC</span>
-                          <strong id="supabaseStateLabel">Mock</strong>
-                        </div>
-                        <label>
-                          <span>PROJECT URL</span>
-                          <input id="supabaseUrlInput" placeholder="https://project-ref.supabase.co" aria-label="Supabase project URL">
-                        </label>
-                        <label>
-                          <span>PUBLISHABLE / ANON KEY</span>
-                          <input id="supabaseKeyInput" type="password" placeholder="sb_publishable_... or anon key" aria-label="Supabase publishable key">
-                        </label>
-                        <div class="button-row">
-                          <button class="primary-control" id="connectSupabaseButton" type="button">Connect</button>
-                          <button class="secondary-control" id="clearSupabaseButton" type="button">Clear</button>
-                        </div>
-                        <p class="muted" id="supabaseStatusLine">Not connected. Demo data is local.</p>
-                      </div>
-
-                      <div class="bs-card account-card">
-                        <div class="section-heading"><span>ACCOUNT</span></div>
-                        <p>ronak@example.com</p>
-                        <button type="button">Sign out</button>
-                      </div>
-                    </div>
+                  <div class="bs-card">
+                    <div class="section-heading">LOG</div>
+                    <div class="ble-log" id="bleLog"></div>
+                    <button class="primary-control" id="simulatePiCommand" type="button">Simulate Pi command</button>
                   </div>
                 </div>
               </div>
+            </section>
+
+            <nav class="tab-bar" aria-label="App tabs">
+              <button class="tab-link is-active" data-tab-target="screen-map" type="button">
+                <span class="icon-slot" data-icon="map"></span>
+                <span>Map</span>
+              </button>
+              <button class="tab-link" data-tab-target="screen-record" type="button">
+                <span class="icon-slot" data-icon="record"></span>
+                <span>Record</span>
+              </button>
+              <button class="tab-link" data-tab-target="screen-rides" type="button">
+                <span class="icon-slot" data-icon="list"></span>
+                <span>Rides</span>
+              </button>
+              <button class="tab-link" data-tab-target="screen-profile" type="button">
+                <span class="icon-slot" data-icon="person"></span>
+                <span>Profile</span>
+              </button>
+            </nav>
+
+            <div class="action-backdrop hidden" id="actionBackdrop" aria-hidden="true"></div>
+            <div class="action-sheet hidden" id="actionSheet" role="dialog" aria-modal="true" aria-label="Actions"></div>
+            <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+
+            <div class="sos-overlay hidden" id="sosOverlay" aria-live="assertive">
+              <span class="icon-slot sos-icon" data-icon="warning"></span>
+              <h2 id="sosTitle">CRASH DETECTED</h2>
+              <p id="sosCopy">Sending SOS in</p>
+              <strong id="sosCountdown">8</strong>
+              <p class="muted" id="sosContact">Will alert: Alex - (555) 910-2211</p>
+              <button class="primary-control" id="cancelSosButton" type="button">I'M OK - CANCEL</button>
             </div>
-
-            <div class="toolbar tabbar tabbar-icons toolbar-bottom">
-              <div class="toolbar-inner">
-                <a href="#" class="bs-tab-link is-active" data-tab-target="#view-map" onclick="window.bsShowTab('#view-map'); return false;">
-                  <i class="f7-icons">map_fill</i>
-                  <span class="tabbar-label">Map</span>
-                </a>
-                <a href="#" class="bs-tab-link" data-tab-target="#view-record" onclick="window.bsShowTab('#view-record'); return false;">
-                  <i class="f7-icons">record_circle</i>
-                  <span class="tabbar-label">Record</span>
-                </a>
-                <a href="#" class="bs-tab-link" data-tab-target="#view-rides" onclick="window.bsShowTab('#view-rides'); return false;">
-                  <i class="f7-icons">list_bullet_rectangle_fill</i>
-                  <span class="tabbar-label">Rides</span>
-                </a>
-                <a href="#" class="bs-tab-link" data-tab-target="#view-profile" onclick="window.bsShowTab('#view-profile'); return false;">
-                  <i class="f7-icons">person_fill</i>
-                  <span class="tabbar-label">Profile</span>
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <div class="sos-overlay hidden" id="sosOverlay" aria-live="assertive">
-            <i class="f7-icons">exclamationmark_triangle_fill</i>
-            <h2 id="sosTitle">CRASH DETECTED</h2>
-            <p id="sosCopy">Sending SOS in</p>
-            <strong id="sosCountdown">8</strong>
-            <p class="muted" id="sosContact">Will alert: Alex - (555) 910-2211</p>
-            <button class="primary-control" id="cancelSosButton" type="button">I'M OK - CANCEL</button>
           </div>
         </div>
       </section>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/framework7@9.0.5/framework7-bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./app.js?v=20260616-live-supabase-2"></script>
+    <script src="./app.js?v=20260616-swiftui-parity-1"></script>
   </body>
 </html>
